@@ -1,0 +1,18 @@
+asyncio
+logging
+
+# Optional dependencies for examples and testing
+# python-lsp-server - for Python language server support
+# Install with: pip install python-lsp-server
+
+# Note: This LSP client implementation uses only Python standard library
+# The only external requirement is having a language server installed
+# for your target programming language.
+
+# Language Server Installation Commands:
+# Python: pip install python-lsp-server
+# TypeScript: npm install -g typescript typescript-language-server
+# Go: go install golang.org/x/tools/gopls@latest
+# Rust: rustup component add rust-analyzer
+# Java: Download from https://download.eclipse.org/jdtls/
+# C/C++: Download clangd from https://github.com/clangd/clangd/releases
