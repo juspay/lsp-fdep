@@ -17,6 +17,8 @@ from enum import Enum
 from pathlib import Path
 import urllib.parse
 
+from pydantic import BaseModel
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +31,7 @@ class LSPMessageType(Enum):
 
 
 @dataclass
-class Position:
+class Position(BaseModel):
     """LSP Position structure"""
 
     line: int  # 0-based
@@ -37,7 +39,7 @@ class Position:
 
 
 @dataclass
-class Range:
+class Range(BaseModel):
     """LSP Range structure"""
 
     start: Position
@@ -45,7 +47,7 @@ class Range:
 
 
 @dataclass
-class Location:
+class Location(BaseModel):
     """LSP Location structure"""
 
     uri: str
@@ -53,7 +55,7 @@ class Location:
 
 
 @dataclass
-class TextEdit:
+class TextEdit(BaseModel):
     """LSP TextEdit structure"""
 
     range: Range
@@ -61,7 +63,7 @@ class TextEdit:
 
 
 @dataclass
-class Diagnostic:
+class Diagnostic(BaseModel):
     """LSP Diagnostic structure"""
 
     range: Range
@@ -72,7 +74,7 @@ class Diagnostic:
 
 
 @dataclass
-class LSPMessage:
+class LSPMessage(BaseModel):
     """LSP Message structure"""
 
     jsonrpc: str = "2.0"
@@ -686,7 +688,7 @@ class LSPClient:
     ) -> List[Location]:
         """Get references at position"""
         uri = self.path_to_uri(file_path)
-
+        print(uri)
         if uri not in self.open_files:
             await self.did_open(file_path)
 

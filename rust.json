@@ -1,0 +1,2770 @@
+[
+  [
+    {
+      "name": "visitor",
+      "kind": "Module",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 17,
+          "character": 0
+        },
+        "end": {
+          "line": 17,
+          "character": 12
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 17,
+          "character": 4
+        },
+        "end": {
+          "line": 17,
+          "character": 11
+        }
+      },
+      "code_string": "mod visitor;",
+      "references": []
+    },
+    {
+      "name": "compile_time_sysroot",
+      "detail": "fn() -> Option<String>",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 19,
+          "character": 0
+        },
+        "end": {
+          "line": 43,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 21,
+          "character": 7
+        },
+        "end": {
+          "line": 21,
+          "character": 27
+        }
+      },
+      "code_string": "/// Returns the \"default sysroot\" that Callgraph will use if no `--sysroot` flag is set.\n/// Should be a compile-time constant.\npub fn compile_time_sysroot() -> Option<String> {\n    // option_env! is replaced to a constant at compile time\n    if option_env!(\"RUSTC_STAGE\").is_some() {\n        // This is being built as part of rustc, and gets shipped with rustup.\n        // We can rely on the sysroot computation in librustc.\n        return None;\n    }\n\n    // For builds outside rustc, we need to ensure that we got a sysroot\n    // that gets used as a default. The sysroot computation in librustc would\n    // end up somewhere in the build dir.\n    // Taken from PR <https://github.com/Manishearth/rust-clippy/pull/911>.\n    let home = option_env!(\"RUSTUP_HOME\").or(option_env!(\"MULTIRUST_HOME\"));\n    let toolchain = option_env!(\"RUSTUP_TOOLCHAIN\").or(option_env!(\"MULTIRUST_TOOLCHAIN\"));\n    Some(match (home, toolchain) {\n        (Some(home), Some(toolchain)) => format!(\"{}/toolchains/{}\", home, toolchain),\n        _ => option_env!(\"RUST_SYSROOT\")\n            .expect(\n                \"To build Callgraph without rustup, set the `RUST_SYSROOT` env var at build time\",\n            )\n            .to_owned(),\n    })\n}",
+      "references": []
+    },
+    {
+      "name": "analyze",
+      "detail": "fn<'tcx>(tcx: &TyCtxt<'tcx>)",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 45,
+          "character": 0
+        },
+        "end": {
+          "line": 61,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 45,
+          "character": 7
+        },
+        "end": {
+          "line": 45,
+          "character": 14
+        }
+      },
+      "code_string": "pub fn analyze<'tcx>(tcx: &TyCtxt<'tcx>) {\n    // Try to determine output directory from command-line arguments\n    let output_dir = get_output_dir().unwrap_or_else(|| PathBuf::from(\"fdep_output\"));\n\n    // Create output directory if it doesn't exist\n    fs::create_dir_all(&output_dir).expect(\"Failed to create output directory\");\n\n    // Initialize visitor with output directory\n    let mut visitor = visitor::CallgraphVisitor::with_output_dir(&tcx, output_dir);\n\n    // Visit all items in the crate\n    tcx.hir().visit_all_item_likes_in_crate(&mut visitor);\n\n    // Dump collected data\n    visitor.dump();\n\n}",
+      "references": []
+    },
+    {
+      "name": "get_output_dir",
+      "detail": "fn() -> Option<PathBuf>",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 63,
+          "character": 0
+        },
+        "end": {
+          "line": 79,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 64,
+          "character": 3
+        },
+        "end": {
+          "line": 64,
+          "character": 17
+        }
+      },
+      "code_string": "// Helper function to determine output directory from command-line arguments\nfn get_output_dir() -> Option<PathBuf> {\n    let args: Vec<String> = env::args().collect();\n    for (i, arg) in args.iter().enumerate() {\n        if arg == \"--output\" || arg == \"-o\" {\n            if i + 1 < args.len() {\n                return Some(PathBuf::from(&args[i + 1]));\n            }\n        }\n\n        if arg.starts_with(\"--output=\") {\n            let path = arg.split('=').nth(1)?;\n            return Some(PathBuf::from(path));\n        }\n    }\n    None\n}",
+      "references": []
+    }
+  ],
+  [
+    {
+      "name": "skip_generated_code",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 15,
+          "character": 0
+        },
+        "end": {
+          "line": 21,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 15,
+          "character": 13
+        },
+        "end": {
+          "line": 15,
+          "character": 32
+        }
+      },
+      "code_string": "macro_rules! skip_generated_code {\n    ($span: expr) => {\n        if $span.from_expansion() || $span.is_dummy() {\n            return;\n        }\n    };\n}",
+      "references": []
+    },
+    {
+      "name": "push_walk_pop",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 23,
+          "character": 0
+        },
+        "end": {
+          "line": 32,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 25,
+          "character": 13
+        },
+        "end": {
+          "line": 25,
+          "character": 26
+        }
+      },
+      "code_string": "// Backup self.cur_fn, set cur_fn to id, continue to walk the AST by executing\n// $walk, then restore self.cur_fn.\nmacro_rules! push_walk_pop {\n    ($this: expr, $id: expr, $walk: expr) => {{\n        let prev_fn = $this.cur_fn;\n        $this.cur_fn = Some($id);\n        $walk;\n        $this.cur_fn = prev_fn;\n    }};\n}",
+      "references": []
+    },
+    {
+      "name": "TypeOriginInfo",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 34,
+          "character": 0
+        },
+        "end": {
+          "line": 42,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 35,
+          "character": 11
+        },
+        "end": {
+          "line": 35,
+          "character": 25
+        }
+      },
+      "children": [
+        {
+          "name": "type_name",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 36,
+              "character": 4
+            },
+            "end": {
+              "line": 36,
+              "character": 25
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 36,
+              "character": 8
+            },
+            "end": {
+              "line": 36,
+              "character": 17
+            }
+          }
+        },
+        {
+          "name": "crate_name",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 37,
+              "character": 4
+            },
+            "end": {
+              "line": 37,
+              "character": 26
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 37,
+              "character": 8
+            },
+            "end": {
+              "line": 37,
+              "character": 18
+            }
+          }
+        },
+        {
+          "name": "module_path",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 38,
+              "character": 4
+            },
+            "end": {
+              "line": 38,
+              "character": 27
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 38,
+              "character": 8
+            },
+            "end": {
+              "line": 38,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "generic_args",
+          "detail": "Vec<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 39,
+              "character": 4
+            },
+            "end": {
+              "line": 39,
+              "character": 41
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 39,
+              "character": 8
+            },
+            "end": {
+              "line": 39,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "is_generic_param",
+          "detail": "bool",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 40,
+              "character": 4
+            },
+            "end": {
+              "line": 40,
+              "character": 30
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 40,
+              "character": 8
+            },
+            "end": {
+              "line": 40,
+              "character": 24
+            }
+          }
+        },
+        {
+          "name": "src_location",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 41,
+              "character": 4
+            },
+            "end": {
+              "line": 41,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 41,
+              "character": 8
+            },
+            "end": {
+              "line": 41,
+              "character": 20
+            }
+          }
+        }
+      ],
+      "code_string": "#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]\npub struct TypeOriginInfo {\n    pub type_name: String,\n    pub crate_name: String,\n    pub module_path: String,\n    pub generic_args: Vec<TypeOriginInfo>,\n    pub is_generic_param: bool,\n    pub src_location: String,\n}",
+      "references": []
+    },
+    {
+      "name": "LiteralInfo",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 44,
+          "character": 0
+        },
+        "end": {
+          "line": 51,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 45,
+          "character": 11
+        },
+        "end": {
+          "line": 45,
+          "character": 22
+        }
+      },
+      "children": [
+        {
+          "name": "value",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 46,
+              "character": 4
+            },
+            "end": {
+              "line": 46,
+              "character": 21
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 46,
+              "character": 8
+            },
+            "end": {
+              "line": 46,
+              "character": 13
+            }
+          }
+        },
+        {
+          "name": "literal_type",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 47,
+              "character": 4
+            },
+            "end": {
+              "line": 47,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 47,
+              "character": 8
+            },
+            "end": {
+              "line": 47,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "span",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 48,
+              "character": 4
+            },
+            "end": {
+              "line": 48,
+              "character": 20
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 48,
+              "character": 8
+            },
+            "end": {
+              "line": 48,
+              "character": 12
+            }
+          }
+        },
+        {
+          "name": "line_number",
+          "detail": "usize",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 49,
+              "character": 4
+            },
+            "end": {
+              "line": 49,
+              "character": 26
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 49,
+              "character": 8
+            },
+            "end": {
+              "line": 49,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "column_number",
+          "detail": "usize",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 50,
+              "character": 4
+            },
+            "end": {
+              "line": 50,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 50,
+              "character": 8
+            },
+            "end": {
+              "line": 50,
+              "character": 21
+            }
+          }
+        }
+      ],
+      "code_string": "#[derive(Debug, Serialize, Clone)]\npub struct LiteralInfo {\n    pub value: String,\n    pub literal_type: String,\n    pub span: String,\n    pub line_number: usize,\n    pub column_number: usize,\n}",
+      "references": []
+    },
+    {
+      "name": "CalledFunctionInfo",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 53,
+          "character": 0
+        },
+        "end": {
+          "line": 67,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 54,
+          "character": 11
+        },
+        "end": {
+          "line": 54,
+          "character": 29
+        }
+      },
+      "children": [
+        {
+          "name": "name",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 55,
+              "character": 4
+            },
+            "end": {
+              "line": 55,
+              "character": 20
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 55,
+              "character": 8
+            },
+            "end": {
+              "line": 55,
+              "character": 12
+            }
+          }
+        },
+        {
+          "name": "fully_qualified_path",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 56,
+              "character": 4
+            },
+            "end": {
+              "line": 56,
+              "character": 36
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 56,
+              "character": 8
+            },
+            "end": {
+              "line": 56,
+              "character": 28
+            }
+          }
+        },
+        {
+          "name": "is_method",
+          "detail": "bool",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 57,
+              "character": 4
+            },
+            "end": {
+              "line": 57,
+              "character": 23
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 57,
+              "character": 8
+            },
+            "end": {
+              "line": 57,
+              "character": 17
+            }
+          }
+        },
+        {
+          "name": "receiver_type",
+          "detail": "Option<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 58,
+              "character": 4
+            },
+            "end": {
+              "line": 58,
+              "character": 45
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 58,
+              "character": 8
+            },
+            "end": {
+              "line": 58,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "input_types",
+          "detail": "Vec<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 59,
+              "character": 4
+            },
+            "end": {
+              "line": 59,
+              "character": 40
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 59,
+              "character": 8
+            },
+            "end": {
+              "line": 59,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "output_types",
+          "detail": "Vec<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 60,
+              "character": 4
+            },
+            "end": {
+              "line": 60,
+              "character": 41
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 60,
+              "character": 8
+            },
+            "end": {
+              "line": 60,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "src_location",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 61,
+              "character": 4
+            },
+            "end": {
+              "line": 61,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 61,
+              "character": 8
+            },
+            "end": {
+              "line": 61,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "line_number",
+          "detail": "usize",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 62,
+              "character": 4
+            },
+            "end": {
+              "line": 62,
+              "character": 26
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 62,
+              "character": 8
+            },
+            "end": {
+              "line": 62,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "column_number",
+          "detail": "usize",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 63,
+              "character": 4
+            },
+            "end": {
+              "line": 63,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 63,
+              "character": 8
+            },
+            "end": {
+              "line": 63,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "origin_crate",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 64,
+              "character": 4
+            },
+            "end": {
+              "line": 64,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 64,
+              "character": 8
+            },
+            "end": {
+              "line": 64,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "origin_module",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 65,
+              "character": 4
+            },
+            "end": {
+              "line": 65,
+              "character": 29
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 65,
+              "character": 8
+            },
+            "end": {
+              "line": 65,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "call_type",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 66,
+              "character": 4
+            },
+            "end": {
+              "line": 66,
+              "character": 25
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 66,
+              "character": 8
+            },
+            "end": {
+              "line": 66,
+              "character": 17
+            }
+          }
+        }
+      ],
+      "code_string": "#[derive(Debug, Serialize, Clone)]\npub struct CalledFunctionInfo {\n    pub name: String,\n    pub fully_qualified_path: String,\n    pub is_method: bool,\n    pub receiver_type: Option<TypeOriginInfo>,\n    pub input_types: Vec<TypeOriginInfo>,\n    pub output_types: Vec<TypeOriginInfo>,\n    pub src_location: String,\n    pub line_number: usize,\n    pub column_number: usize,\n    pub origin_crate: String,\n    pub origin_module: String,\n    pub call_type: String, // \"function\", \"method\", \"macro\", etc.\n}",
+      "references": []
+    },
+    {
+      "name": "Function",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 69,
+          "character": 0
+        },
+        "end": {
+          "line": 91,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 70,
+          "character": 11
+        },
+        "end": {
+          "line": 70,
+          "character": 19
+        }
+      },
+      "children": [
+        {
+          "name": "name",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 71,
+              "character": 4
+            },
+            "end": {
+              "line": 71,
+              "character": 20
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 71,
+              "character": 8
+            },
+            "end": {
+              "line": 71,
+              "character": 12
+            }
+          }
+        },
+        {
+          "name": "fully_qualified_path",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 72,
+              "character": 4
+            },
+            "end": {
+              "line": 72,
+              "character": 36
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 72,
+              "character": 8
+            },
+            "end": {
+              "line": 72,
+              "character": 28
+            }
+          }
+        },
+        {
+          "name": "is_method",
+          "detail": "bool",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 73,
+              "character": 4
+            },
+            "end": {
+              "line": 73,
+              "character": 23
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 73,
+              "character": 8
+            },
+            "end": {
+              "line": 73,
+              "character": 17
+            }
+          }
+        },
+        {
+          "name": "self_type",
+          "detail": "Option<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 74,
+              "character": 4
+            },
+            "end": {
+              "line": 74,
+              "character": 41
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 74,
+              "character": 8
+            },
+            "end": {
+              "line": 74,
+              "character": 17
+            }
+          }
+        },
+        {
+          "name": "input_types",
+          "detail": "Vec<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 75,
+              "character": 4
+            },
+            "end": {
+              "line": 75,
+              "character": 40
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 75,
+              "character": 8
+            },
+            "end": {
+              "line": 75,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "output_types",
+          "detail": "Vec<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 76,
+              "character": 4
+            },
+            "end": {
+              "line": 76,
+              "character": 41
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 76,
+              "character": 8
+            },
+            "end": {
+              "line": 76,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "types_used",
+          "detail": "Vec<TypeOriginInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 77,
+              "character": 4
+            },
+            "end": {
+              "line": 77,
+              "character": 39
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 77,
+              "character": 8
+            },
+            "end": {
+              "line": 77,
+              "character": 18
+            }
+          }
+        },
+        {
+          "name": "literals_used",
+          "detail": "Vec<LiteralInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 78,
+              "character": 4
+            },
+            "end": {
+              "line": 78,
+              "character": 39
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 78,
+              "character": 8
+            },
+            "end": {
+              "line": 78,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "functions_called",
+          "detail": "Vec<CalledFunctionInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 79,
+              "character": 4
+            },
+            "end": {
+              "line": 79,
+              "character": 49
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 79,
+              "character": 8
+            },
+            "end": {
+              "line": 79,
+              "character": 24
+            }
+          }
+        },
+        {
+          "name": "methods_called",
+          "detail": "Vec<CalledFunctionInfo>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 80,
+              "character": 4
+            },
+            "end": {
+              "line": 80,
+              "character": 47
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 80,
+              "character": 8
+            },
+            "end": {
+              "line": 80,
+              "character": 22
+            }
+          }
+        },
+        {
+          "name": "where_functions",
+          "detail": "HashMap<String, Function>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 81,
+              "character": 4
+            },
+            "end": {
+              "line": 81,
+              "character": 50
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 81,
+              "character": 8
+            },
+            "end": {
+              "line": 81,
+              "character": 23
+            }
+          }
+        },
+        {
+          "name": "src_location",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 82,
+              "character": 4
+            },
+            "end": {
+              "line": 82,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 82,
+              "character": 8
+            },
+            "end": {
+              "line": 82,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "src_code",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 83,
+              "character": 4
+            },
+            "end": {
+              "line": 83,
+              "character": 24
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 83,
+              "character": 8
+            },
+            "end": {
+              "line": 83,
+              "character": 16
+            }
+          }
+        },
+        {
+          "name": "line_number_start",
+          "detail": "usize",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 84,
+              "character": 4
+            },
+            "end": {
+              "line": 84,
+              "character": 32
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 84,
+              "character": 8
+            },
+            "end": {
+              "line": 84,
+              "character": 25
+            }
+          }
+        },
+        {
+          "name": "line_number_end",
+          "detail": "usize",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 85,
+              "character": 4
+            },
+            "end": {
+              "line": 85,
+              "character": 30
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 85,
+              "character": 8
+            },
+            "end": {
+              "line": 85,
+              "character": 23
+            }
+          }
+        },
+        {
+          "name": "crate_name",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 86,
+              "character": 4
+            },
+            "end": {
+              "line": 86,
+              "character": 26
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 86,
+              "character": 8
+            },
+            "end": {
+              "line": 86,
+              "character": 18
+            }
+          }
+        },
+        {
+          "name": "module_path",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 87,
+              "character": 4
+            },
+            "end": {
+              "line": 87,
+              "character": 27
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 87,
+              "character": 8
+            },
+            "end": {
+              "line": 87,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "visibility",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 88,
+              "character": 4
+            },
+            "end": {
+              "line": 88,
+              "character": 26
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 88,
+              "character": 8
+            },
+            "end": {
+              "line": 88,
+              "character": 18
+            }
+          }
+        },
+        {
+          "name": "doc_comments",
+          "detail": "String",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 89,
+              "character": 4
+            },
+            "end": {
+              "line": 89,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 89,
+              "character": 8
+            },
+            "end": {
+              "line": 89,
+              "character": 20
+            }
+          }
+        },
+        {
+          "name": "attributes",
+          "detail": "Vec<String>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 90,
+              "character": 4
+            },
+            "end": {
+              "line": 90,
+              "character": 31
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 90,
+              "character": 8
+            },
+            "end": {
+              "line": 90,
+              "character": 18
+            }
+          }
+        }
+      ],
+      "code_string": "#[derive(Debug, Serialize, Clone)]\npub struct Function {\n    pub name: String,\n    pub fully_qualified_path: String,\n    pub is_method: bool,\n    pub self_type: Option<TypeOriginInfo>,\n    pub input_types: Vec<TypeOriginInfo>,\n    pub output_types: Vec<TypeOriginInfo>,\n    pub types_used: Vec<TypeOriginInfo>,\n    pub literals_used: Vec<LiteralInfo>,\n    pub functions_called: Vec<CalledFunctionInfo>,\n    pub methods_called: Vec<CalledFunctionInfo>,\n    pub where_functions: HashMap<String, Function>,\n    pub src_location: String,\n    pub src_code: String,\n    pub line_number_start: usize,\n    pub line_number_end: usize,\n    pub crate_name: String,\n    pub module_path: String,\n    pub visibility: String,\n    pub doc_comments: String,\n    pub attributes: Vec<String>,\n}",
+      "references": []
+    },
+    {
+      "name": "Call",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 93,
+          "character": 0
+        },
+        "end": {
+          "line": 104,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 94,
+          "character": 11
+        },
+        "end": {
+          "line": 94,
+          "character": 15
+        }
+      },
+      "children": [
+        {
+          "name": "call_expr",
+          "detail": "HirId",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 95,
+              "character": 4
+            },
+            "end": {
+              "line": 96,
+              "character": 24
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 96,
+              "character": 8
+            },
+            "end": {
+              "line": 96,
+              "character": 17
+            }
+          }
+        },
+        {
+          "name": "call_expr_span",
+          "detail": "Span",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 97,
+              "character": 4
+            },
+            "end": {
+              "line": 97,
+              "character": 28
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 97,
+              "character": 8
+            },
+            "end": {
+              "line": 97,
+              "character": 22
+            }
+          }
+        },
+        {
+          "name": "caller",
+          "detail": "Option<DefId>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 98,
+              "character": 4
+            },
+            "end": {
+              "line": 99,
+              "character": 29
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 99,
+              "character": 8
+            },
+            "end": {
+              "line": 99,
+              "character": 14
+            }
+          }
+        },
+        {
+          "name": "caller_span",
+          "detail": "Option<Span>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 100,
+              "character": 4
+            },
+            "end": {
+              "line": 100,
+              "character": 33
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 100,
+              "character": 8
+            },
+            "end": {
+              "line": 100,
+              "character": 19
+            }
+          }
+        },
+        {
+          "name": "callee",
+          "detail": "DefId",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 101,
+              "character": 4
+            },
+            "end": {
+              "line": 102,
+              "character": 21
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 102,
+              "character": 8
+            },
+            "end": {
+              "line": 102,
+              "character": 14
+            }
+          }
+        },
+        {
+          "name": "callee_span",
+          "detail": "Span",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 103,
+              "character": 4
+            },
+            "end": {
+              "line": 103,
+              "character": 25
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 103,
+              "character": 8
+            },
+            "end": {
+              "line": 103,
+              "character": 19
+            }
+          }
+        }
+      ],
+      "code_string": "#[derive(Hash, PartialEq, Eq, Debug)]\npub struct Call {\n    // the call expression\n    pub call_expr: HirId,\n    pub call_expr_span: Span,\n    // possible enclosing function\n    pub caller: Option<DefId>,\n    pub caller_span: Option<Span>,\n    // call target\n    pub callee: DefId,\n    pub callee_span: Span,\n}",
+      "references": []
+    },
+    {
+      "name": "CallgraphVisitor",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 106,
+          "character": 0
+        },
+        "end": {
+          "line": 117,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 106,
+          "character": 11
+        },
+        "end": {
+          "line": 106,
+          "character": 27
+        }
+      },
+      "children": [
+        {
+          "name": "tcx",
+          "detail": "TyCtxt<'tcx>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 107,
+              "character": 4
+            },
+            "end": {
+              "line": 108,
+              "character": 25
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 108,
+              "character": 8
+            },
+            "end": {
+              "line": 108,
+              "character": 11
+            }
+          }
+        },
+        {
+          "name": "cur_fn",
+          "detail": "Option<DefId>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 110,
+              "character": 4
+            },
+            "end": {
+              "line": 111,
+              "character": 29
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 111,
+              "character": 8
+            },
+            "end": {
+              "line": 111,
+              "character": 14
+            }
+          }
+        },
+        {
+          "name": "function_data",
+          "detail": "Vec<Function>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 113,
+              "character": 4
+            },
+            "end": {
+              "line": 114,
+              "character": 36
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 114,
+              "character": 8
+            },
+            "end": {
+              "line": 114,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "curr_module_path",
+          "detail": "Vec<String>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 115,
+              "character": 4
+            },
+            "end": {
+              "line": 115,
+              "character": 37
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 115,
+              "character": 8
+            },
+            "end": {
+              "line": 115,
+              "character": 24
+            }
+          }
+        },
+        {
+          "name": "output_dir",
+          "detail": "Option<PathBuf>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 116,
+              "character": 4
+            },
+            "end": {
+              "line": 116,
+              "character": 35
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 116,
+              "character": 8
+            },
+            "end": {
+              "line": 116,
+              "character": 18
+            }
+          }
+        }
+      ],
+      "code_string": "pub struct CallgraphVisitor<'tcx> {\n    // type context\n    pub tcx: TyCtxt<'tcx>,\n\n    // tracks the current function we're in during AST walk\n    pub cur_fn: Option<DefId>,\n\n    // Enhanced function data\n    pub function_data: Vec<Function>,\n    pub curr_module_path: Vec<String>,\n    pub output_dir: Option<PathBuf>,\n}",
+      "references": []
+    },
+    {
+      "name": "impl CallgraphVisitor<'tcx>",
+      "kind": "Object",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 119,
+          "character": 0
+        },
+        "end": {
+          "line": 1374,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 119,
+          "character": 11
+        },
+        "end": {
+          "line": 119,
+          "character": 33
+        }
+      },
+      "children": [
+        {
+          "name": "new",
+          "detail": "fn(tcx: &TyCtxt<'tcx>) -> CallgraphVisitor<'tcx>",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 120,
+              "character": 4
+            },
+            "end": {
+              "line": 128,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 120,
+              "character": 11
+            },
+            "end": {
+              "line": 120,
+              "character": 14
+            }
+          }
+        },
+        {
+          "name": "with_output_dir",
+          "detail": "fn(tcx: &TyCtxt<'tcx>, output_dir: PathBuf) -> CallgraphVisitor<'tcx>",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 130,
+              "character": 4
+            },
+            "end": {
+              "line": 134,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 130,
+              "character": 11
+            },
+            "end": {
+              "line": 130,
+              "character": 26
+            }
+          }
+        },
+        {
+          "name": "dump",
+          "detail": "fn(&self)",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 136,
+              "character": 4
+            },
+            "end": {
+              "line": 182,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 136,
+              "character": 11
+            },
+            "end": {
+              "line": 136,
+              "character": 15
+            }
+          }
+        },
+        {
+          "name": "push_module",
+          "detail": "fn(&mut self, name: String)",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 184,
+              "character": 4
+            },
+            "end": {
+              "line": 187,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 185,
+              "character": 11
+            },
+            "end": {
+              "line": 185,
+              "character": 22
+            }
+          }
+        },
+        {
+          "name": "pop_module",
+          "detail": "fn(&mut self)",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 189,
+              "character": 4
+            },
+            "end": {
+              "line": 191,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 189,
+              "character": 11
+            },
+            "end": {
+              "line": 189,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "current_module_path",
+          "detail": "fn(&self) -> String",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 193,
+              "character": 4
+            },
+            "end": {
+              "line": 195,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 193,
+              "character": 11
+            },
+            "end": {
+              "line": 193,
+              "character": 30
+            }
+          }
+        },
+        {
+          "name": "get_attrs_string",
+          "detail": "fn(&self, hir_id: HirId) -> Vec<String>",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 197,
+              "character": 4
+            },
+            "end": {
+              "line": 202,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 197,
+              "character": 11
+            },
+            "end": {
+              "line": 197,
+              "character": 27
+            }
+          }
+        },
+        {
+          "name": "extract_doc_comments",
+          "detail": "fn(&self, hir_id: HirId) -> String",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 204,
+              "character": 4
+            },
+            "end": {
+              "line": 221,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 204,
+              "character": 11
+            },
+            "end": {
+              "line": 204,
+              "character": 31
+            }
+          }
+        },
+        {
+          "name": "extract_visibility",
+          "detail": "fn(&self, owner_id: rustc_hir::OwnerId) -> String",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 223,
+              "character": 4
+            },
+            "end": {
+              "line": 231,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 223,
+              "character": 11
+            },
+            "end": {
+              "line": 223,
+              "character": 29
+            }
+          }
+        },
+        {
+          "name": "format_span",
+          "detail": "fn(&self, span: Span) -> String",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 233,
+              "character": 4
+            },
+            "end": {
+              "line": 243,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 233,
+              "character": 11
+            },
+            "end": {
+              "line": 233,
+              "character": 22
+            }
+          }
+        },
+        {
+          "name": "get_line_number",
+          "detail": "fn(&self, span: Span) -> usize",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 245,
+              "character": 4
+            },
+            "end": {
+              "line": 247,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 245,
+              "character": 11
+            },
+            "end": {
+              "line": 245,
+              "character": 26
+            }
+          }
+        },
+        {
+          "name": "get_column_number",
+          "detail": "fn(&self, span: Span) -> usize",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 249,
+              "character": 4
+            },
+            "end": {
+              "line": 256,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 249,
+              "character": 11
+            },
+            "end": {
+              "line": 249,
+              "character": 28
+            }
+          }
+        },
+        {
+          "name": "extract_type_from_qpath",
+          "detail": "fn( &self, qpath: &rustc_hir::QPath<'_>, span: Span, ) -> Option<TypeOriginInfo>",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 258,
+              "character": 4
+            },
+            "end": {
+              "line": 410,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 258,
+              "character": 11
+            },
+            "end": {
+              "line": 258,
+              "character": 34
+            }
+          }
+        },
+        {
+          "name": "extract_type_origin_info",
+          "detail": "fn(&self, hir_ty: &rustc_hir::Ty<'_>) -> Option<TypeOriginInfo>",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 412,
+              "character": 4
+            },
+            "end": {
+              "line": 535,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 412,
+              "character": 11
+            },
+            "end": {
+              "line": 412,
+              "character": 35
+            }
+          }
+        },
+        {
+          "name": "extract_type_origin_info_from_ty",
+          "detail": "fn( &self, ty: rustc_middle::ty::Ty<'_>, ) -> Option<TypeOriginInfo>",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 537,
+              "character": 4
+            },
+            "end": {
+              "line": 937,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 537,
+              "character": 11
+            },
+            "end": {
+              "line": 537,
+              "character": 43
+            }
+          }
+        },
+        {
+          "name": "analyze_body",
+          "detail": "fn( &self, body: &'tcx rustc_hir::Body<'tcx>, ) -> ( Vec<CalledFunctionInfo>, Vec<CalledFunctionInfo>, Vec<TypeOriginInfo>, Vec<LiteralInfo>, HashMap<String, Function>, )",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 939,
+              "character": 4
+            },
+            "end": {
+              "line": 1266,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 939,
+              "character": 11
+            },
+            "end": {
+              "line": 939,
+              "character": 23
+            }
+          },
+          "children": [
+            {
+              "name": "BodyCollector",
+              "kind": 23,
+              "tags": [],
+              "deprecated": false,
+              "range": {
+                "start": {
+                  "line": 949,
+                  "character": 8
+                },
+                "end": {
+                  "line": 958,
+                  "character": 9
+                }
+              },
+              "selectionRange": {
+                "start": {
+                  "line": 949,
+                  "character": 15
+                },
+                "end": {
+                  "line": 949,
+                  "character": 28
+                }
+              },
+              "children": [
+                {
+                  "name": "tcx",
+                  "detail": "TyCtxt<'tcx>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 950,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 950,
+                      "character": 29
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 950,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 950,
+                      "character": 15
+                    }
+                  }
+                },
+                {
+                  "name": "functions_called",
+                  "detail": "Vec<CalledFunctionInfo>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 951,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 951,
+                      "character": 53
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 951,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 951,
+                      "character": 28
+                    }
+                  }
+                },
+                {
+                  "name": "methods_called",
+                  "detail": "Vec<CalledFunctionInfo>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 952,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 952,
+                      "character": 51
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 952,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 952,
+                      "character": 26
+                    }
+                  }
+                },
+                {
+                  "name": "types_used",
+                  "detail": "HashSet<TypeOriginInfo>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 953,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 953,
+                      "character": 47
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 953,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 953,
+                      "character": 22
+                    }
+                  }
+                },
+                {
+                  "name": "literals_used",
+                  "detail": "Vec<LiteralInfo>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 954,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 954,
+                      "character": 43
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 954,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 954,
+                      "character": 25
+                    }
+                  }
+                },
+                {
+                  "name": "where_functions",
+                  "detail": "HashMap<String, Function>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 955,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 955,
+                      "character": 54
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 955,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 955,
+                      "character": 27
+                    }
+                  }
+                },
+                {
+                  "name": "closure_count",
+                  "detail": "usize",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 956,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 956,
+                      "character": 32
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 956,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 956,
+                      "character": 25
+                    }
+                  }
+                },
+                {
+                  "name": "parent_collector",
+                  "detail": "&'a CallgraphVisitor<'tcx>",
+                  "kind": 8,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 957,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 957,
+                      "character": 56
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 957,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 957,
+                      "character": 28
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "impl Visitor<'tcx> for BodyCollector<'a, 'tcx>",
+              "kind": 19,
+              "tags": [],
+              "deprecated": false,
+              "range": {
+                "start": {
+                  "line": 960,
+                  "character": 8
+                },
+                "end": {
+                  "line": 1244,
+                  "character": 9
+                }
+              },
+              "selectionRange": {
+                "start": {
+                  "line": 960,
+                  "character": 41
+                },
+                "end": {
+                  "line": 960,
+                  "character": 64
+                }
+              },
+              "children": [
+                {
+                  "name": "visit_expr",
+                  "detail": "fn(&mut self, expr: &'tcx rustc_hir::Expr<'tcx>)",
+                  "kind": 6,
+                  "tags": [],
+                  "deprecated": false,
+                  "range": {
+                    "start": {
+                      "line": 961,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 1243,
+                      "character": 13
+                    }
+                  },
+                  "selectionRange": {
+                    "start": {
+                      "line": 961,
+                      "character": 15
+                    },
+                    "end": {
+                      "line": 961,
+                      "character": 25
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "process_function_data",
+          "detail": "fn( &mut self, sig: &rustc_hir::FnSig<'tcx>, hir_id: HirId, body_id: BodyId, span: Span, )",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 1268,
+              "character": 4
+            },
+            "end": {
+              "line": 1373,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 1268,
+              "character": 11
+            },
+            "end": {
+              "line": 1268,
+              "character": 32
+            }
+          }
+        }
+      ],
+      "code_string": "impl<'tcx> CallgraphVisitor<'tcx> {\n    pub fn new(tcx: &TyCtxt<'tcx>) -> CallgraphVisitor<'tcx> {\n        CallgraphVisitor {\n            tcx: *tcx,\n            cur_fn: None,\n            function_data: Vec::new(),\n            curr_module_path: Vec::new(),\n            output_dir: None,\n        }\n    }\n\n    pub fn with_output_dir(tcx: &TyCtxt<'tcx>, output_dir: PathBuf) -> CallgraphVisitor<'tcx> {\n        let mut visitor = Self::new(tcx);\n        visitor.output_dir = Some(output_dir);\n        visitor\n    }\n\n    pub fn dump(&self) {\n        // Export enhanced function data if output_dir is set\n        if let Some(output_dir) = &self.output_dir {\n            // Create output directory if it doesn't exist\n            fs::create_dir_all(output_dir).expect(\"Failed to create output directory\");\n            // Group functions by file\n            let mut file_to_functions: HashMap<String, Vec<Function>> = HashMap::new();\n\n            for function in &self.function_data {\n                file_to_functions\n                    .entry(function.src_location.to_string())\n                    .or_default()\n                    .push(function.clone());\n            }\n\n            // Create output directories mirroring the project structure\n            for (file_path, functions) in &file_to_functions {\n                // Create output path that mirrors the source file structure\n                println!(\"file_path : {:?}\", file_path);\n                let path = PathBuf::from(file_path);\n                let file_name = path.file_name().unwrap_or_default().to_string_lossy();\n                let parent_path = path.parent().unwrap_or_else(|| std::path::Path::new(\"\"));\n\n                // Create the output directory structure\n                let output_file_dir = output_dir.join(parent_path);\n                fs::create_dir_all(&output_file_dir)\n                    .expect(\"Could not create output directory structure\");\n\n                // Write JSON for this file\n                let json_name = format!(\"{}.json\", file_name.replace(\".rs\", \"\"));\n                let json_path = output_file_dir.join(json_name);\n\n                let json = serde_json::to_string_pretty(&functions)\n                    .expect(\"Failed to serialize file functions\");\n                match fs::write(&json_path, json) {\n                    Ok(_) => {}\n                    Err(err) => println!(\n                        \"{:?} {:?}\",\n                        &format!(\"Could not write JSON for file {}\", file_path),\n                        err\n                    ),\n                };\n\n                println!(\"Created: {}\", json_path.display());\n            }\n        }\n    }\n\n    // Helper methods for enhanced data collection\n    pub fn push_module(&mut self, name: String) {\n        self.curr_module_path.push(name);\n    }\n\n    pub fn pop_module(&mut self) {\n        self.curr_module_path.pop();\n    }\n\n    pub fn current_module_path(&self) -> String {\n        self.curr_module_path.join(\"::\")\n    }\n\n    pub fn get_attrs_string(&self, hir_id: HirId) -> Vec<String> {\n        let attrs = self\n            .tcx\n            .get_attrs(hir_id.owner.to_def_id(), rustc_span::sym::TyCtxt);\n        attrs.map(|attr| format!(\"{:?}\", attr)).collect()\n    }\n\n    pub fn extract_doc_comments(&self, hir_id: HirId) -> String {\n        let attrs = self\n            .tcx\n            .get_attrs(hir_id.owner.to_def_id(), rustc_span::sym::TyCtxt);\n        let mut doc_comments = String::new();\n\n        for attr in attrs {\n            if attr.has_name(rustc_span::Symbol::intern(\"doc\")) {\n                if let Some(doc) = attr.value_str() {\n                    if !doc_comments.is_empty() {\n                        doc_comments.push('\\n');\n                    }\n                    doc_comments.push_str(&doc.to_string());\n                }\n            }\n        }\n        doc_comments\n    }\n\n    pub fn extract_visibility(&self, owner_id: rustc_hir::OwnerId) -> String {\n        match self.tcx.visibility(owner_id.to_def_id()) {\n            Visibility::Public => \"pub\".to_string(),\n            Visibility::Restricted(def_id) => {\n                let path = self.tcx.def_path_str(def_id);\n                format!(\"pub({})\", path)\n            }\n        }\n    }\n\n    pub fn format_span(&self, span: Span) -> String {\n        let source_map = self.tcx.sess.source_map();\n        source_map\n            .span_to_filename(span)\n            .into_local_path()\n            .unwrap()\n            .as_path()\n            .to_str()\n            .unwrap()\n            .to_owned()\n    }\n\n    pub fn get_line_number(&self, span: Span) -> usize {\n        self.tcx.sess.source_map().lookup_char_pos(span.lo()).line\n    }\n\n    pub fn get_column_number(&self, span: Span) -> usize {\n        self.tcx\n            .sess\n            .source_map()\n            .lookup_char_pos(span.lo())\n            .col\n            .to_usize()\n    }\n\n    pub fn extract_type_from_qpath(\n        &self,\n        qpath: &rustc_hir::QPath<'_>,\n        span: Span,\n    ) -> Option<TypeOriginInfo> {\n        match qpath {\n            rustc_hir::QPath::Resolved(_, path) => {\n                match path.res {\n                    rustc_hir::def::Res::Def(_, def_id) => {\n                        let type_name = path\n                            .segments\n                            .last()\n                            .map(|seg| seg.ident.to_string())\n                            .unwrap_or_else(|| \"unknown\".to_string());\n\n                        // Get crate and module info\n                        let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n                        let def_path = self.tcx.def_path(def_id);\n\n                        // Extract module path\n                        let module_path = def_path\n                            .data\n                            .iter()\n                            .take(def_path.data.len().saturating_sub(1)) // Exclude the type name itself\n                            .map(|elem| elem.data.to_string())\n                            .collect::<Vec<_>>()\n                            .join(\"::\");\n\n                        // Handle generic arguments if present\n                        let mut generic_args = Vec::new();\n                        if let Some(args) = path.segments.last().and_then(|seg| seg.args) {\n                            for arg in args.args.iter() {\n                                match arg {\n                                    rustc_hir::GenericArg::Type(ty) => {\n                                        if let Some(type_info) = self.extract_type_origin_info(ty) {\n                                            generic_args.push(type_info);\n                                        }\n                                    }\n                                    rustc_hir::GenericArg::Lifetime(lt) => {\n                                        generic_args.push(TypeOriginInfo {\n                                            type_name: format!(\"'{}\", lt.ident.to_string()),\n                                            crate_name: \"\".to_string(),\n                                            module_path: \"\".to_string(),\n                                            generic_args: Vec::new(),\n                                            is_generic_param: true,\n                                            src_location: self.format_span(lt.ident.span),\n                                        });\n                                    }\n                                    rustc_hir::GenericArg::Const(c) => {\n                                        // Add const generic arguments\n                                        generic_args.push(TypeOriginInfo {\n                                            type_name: format!(\"{:?}\", c),\n                                            crate_name: \"\".to_string(),\n                                            module_path: \"\".to_string(),\n                                            generic_args: Vec::new(),\n                                            is_generic_param: true,\n                                            src_location: self.format_span(c.span()),\n                                        });\n                                    }\n                                    _ => {}\n                                }\n                            }\n                        }\n\n                        // Format the type name with generic arguments if present\n                        let full_type_name = if !generic_args.is_empty() {\n                            let generic_names: Vec<String> =\n                                generic_args.iter().map(|g| g.type_name.clone()).collect();\n                            format!(\"{}<{}>\", type_name, generic_names.join(\", \"))\n                        } else {\n                            type_name.clone()\n                        };\n\n                        Some(TypeOriginInfo {\n                            type_name: full_type_name,\n                            crate_name,\n                            module_path,\n                            generic_args,\n                            is_generic_param: false,\n                            src_location: self.format_span(span),\n                        })\n                    }\n                    rustc_hir::def::Res::PrimTy(prim_ty) => {\n                        // Handle primitive types\n                        Some(TypeOriginInfo {\n                            type_name: format!(\"{:?}\", prim_ty).to_lowercase(),\n                            crate_name: \"core\".to_string(),\n                            module_path: \"primitive\".to_string(),\n                            generic_args: Vec::new(),\n                            is_generic_param: false,\n                            src_location: self.format_span(span),\n                        })\n                    }\n                    rustc_hir::def::Res::SelfTyParam { .. } => {\n                        // Handle Self type parameter\n                        Some(TypeOriginInfo {\n                            type_name: \"Self\".to_string(),\n                            crate_name: \"\".to_string(),\n                            module_path: \"\".to_string(),\n                            generic_args: Vec::new(),\n                            is_generic_param: true,\n                            src_location: self.format_span(span),\n                        })\n                    }\n                    _ => None,\n                }\n            }\n            rustc_hir::QPath::TypeRelative(base, segment) => {\n                // Handle associated types like T::Item\n                if let Some(base_type) = self.extract_type_origin_info(base) {\n                    let assoc_type_name =\n                        format!(\"{}::{}\", base_type.type_name, segment.ident.to_string());\n\n                    let mut generic_args = Vec::new();\n                    generic_args.push(base_type);\n\n                    // Add generic args from the segment if any\n                    // if let Some(args) = segment.args {\n                    //     for arg in args.args.iter() {\n                    //         if let rustc_hir::GenericArg::Type(ty) = arg {\n                    //             if let Some(type_info) = self.extract_type_origin_info(ty) {\n                    //                 generic_args.push(type_info);\n                    //             }\n                    //         }\n                    //     }\n                    // }\n\n                    Some(TypeOriginInfo {\n                        type_name: assoc_type_name,\n                        crate_name: \"\".to_string(), // Can't determine crate for associated type directly\n                        module_path: \"\".to_string(),\n                        generic_args,\n                        is_generic_param: false,\n                        src_location: self.format_span(segment.ident.span),\n                    })\n                } else {\n                    None\n                }\n            }\n            rustc_hir::QPath::LangItem(lang_item, span) => {\n                // Handle lang items\n                Some(TypeOriginInfo {\n                    type_name: format!(\"<lang_item:{:?}>\", lang_item),\n                    crate_name: \"core\".to_string(),\n                    module_path: \"lang_items\".to_string(),\n                    generic_args: Vec::new(),\n                    is_generic_param: false,\n                    src_location: self.format_span(*span),\n                })\n            }\n            _ => None,\n        }\n    }\n\n    pub fn extract_type_origin_info(&self, hir_ty: &rustc_hir::Ty<'_>) -> Option<TypeOriginInfo> {\n        match &hir_ty.kind {\n            rustc_hir::TyKind::Path(qpath) => self.extract_type_from_qpath(qpath, hir_ty.span),\n            rustc_hir::TyKind::Ref(lifetime, mutty) => {\n                let mut base_type = self.extract_type_origin_info(mutty.ty)?;\n                base_type.type_name = format!(\n                    \"&{}{}\",\n                    if mutty.mutbl.is_mut() { \"mut \" } else { \"\" },\n                    base_type.type_name\n                );\n                Some(base_type)\n            }\n            rustc_hir::TyKind::Slice(ty) => {\n                let element_type = self.extract_type_origin_info(ty)?;\n                Some(TypeOriginInfo {\n                    type_name: format!(\"[{}]\", element_type.type_name),\n                    crate_name: \"core\".to_string(),\n                    module_path: \"slice\".to_string(),\n                    generic_args: vec![element_type],\n                    is_generic_param: false,\n                    src_location: self.format_span(hir_ty.span),\n                })\n            }\n            rustc_hir::TyKind::Array(ty, len) => {\n                let element_type = self.extract_type_origin_info(ty)?;\n                Some(TypeOriginInfo {\n                    type_name: format!(\"[{}; {:?}]\", element_type.type_name, len),\n                    crate_name: \"core\".to_string(),\n                    module_path: \"array\".to_string(),\n                    generic_args: vec![element_type],\n                    is_generic_param: false,\n                    src_location: self.format_span(hir_ty.span),\n                })\n            }\n            rustc_hir::TyKind::Tup(tys) => {\n                let mut tuple_elements = Vec::new();\n                for ty in tys.iter() {\n                    if let Some(element_type) = self.extract_type_origin_info(ty) {\n                        tuple_elements.push(element_type);\n                    }\n                }\n\n                let tuple_type_name = if tuple_elements.is_empty() {\n                    \"()\".to_string()\n                } else {\n                    let element_names: Vec<String> =\n                        tuple_elements.iter().map(|e| e.type_name.clone()).collect();\n                    format!(\"({})\", element_names.join(\", \"))\n                };\n\n                Some(TypeOriginInfo {\n                    type_name: tuple_type_name,\n                    crate_name: \"core\".to_string(),\n                    module_path: \"tuple\".to_string(),\n                    generic_args: tuple_elements,\n                    is_generic_param: false,\n                    src_location: self.format_span(hir_ty.span),\n                })\n            }\n            rustc_hir::TyKind::BareFn(fn_decl) => {\n                let mut param_types = Vec::new();\n                for param in fn_decl.decl.inputs.iter() {\n                    if let Some(param_type) = self.extract_type_origin_info(param) {\n                        param_types.push(param_type);\n                    }\n                }\n\n                let mut return_type = None;\n                if let rustc_hir::FnRetTy::Return(ret_ty) = &fn_decl.decl.output {\n                    return_type = self.extract_type_origin_info(ret_ty);\n                }\n\n                let fn_type_name = format!(\n                    \"fn({}) -> {}\",\n                    param_types\n                        .iter()\n                        .map(|p| p.type_name.clone())\n                        .collect::<Vec<_>>()\n                        .join(\", \"),\n                    return_type\n                        .as_ref()\n                        .map_or(\"()\".to_string(), |t| t.type_name.clone())\n                );\n\n                let mut generic_args = param_types;\n                if let Some(ret) = return_type {\n                    generic_args.push(ret);\n                }\n\n                Some(TypeOriginInfo {\n                    type_name: fn_type_name,\n                    crate_name: \"core\".to_string(),\n                    module_path: \"primitive\".to_string(),\n                    generic_args,\n                    is_generic_param: false,\n                    src_location: self.format_span(hir_ty.span),\n                })\n            }\n            rustc_hir::TyKind::Never => Some(TypeOriginInfo {\n                type_name: \"!\".to_string(),\n                crate_name: \"core\".to_string(),\n                module_path: \"never\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: self.format_span(hir_ty.span),\n            }),\n            rustc_hir::TyKind::Infer => Some(TypeOriginInfo {\n                type_name: \"_\".to_string(),\n                crate_name: \"\".to_string(),\n                module_path: \"\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: self.format_span(hir_ty.span),\n            }),\n            _ => Some(TypeOriginInfo {\n                type_name: format!(\"{:?}\", hir_ty.kind),\n                crate_name: \"unknown\".to_string(),\n                module_path: \"unknown\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: self.format_span(hir_ty.span),\n            }),\n        }\n    }\n\n    pub fn extract_type_origin_info_from_ty(\n        &self,\n        ty: rustc_middle::ty::Ty<'_>,\n    ) -> Option<TypeOriginInfo> {\n        match ty.kind() {\n            TyKind::Bool => Some(TypeOriginInfo {\n                type_name: \"bool\".to_string(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n            TyKind::Char => Some(TypeOriginInfo {\n                type_name: \"char\".to_string(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n            TyKind::Int(int_ty) => Some(TypeOriginInfo {\n                type_name: format!(\"{:?}\", int_ty).to_lowercase(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n            TyKind::Uint(uint_ty) => Some(TypeOriginInfo {\n                type_name: format!(\"{:?}\", uint_ty).to_lowercase(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n            TyKind::Float(float_ty) => Some(TypeOriginInfo {\n                type_name: format!(\"{:?}\", float_ty).to_lowercase(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n            TyKind::Adt(adt_def, substs) => {\n                let def_id = adt_def.did();\n                let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n                let def_path = self.tcx.def_path(def_id);\n\n                let mut path_segments = Vec::new();\n                for data in &def_path.data {\n                    path_segments.push(data.data.to_string());\n                }\n\n                let type_name = path_segments\n                    .last()\n                    .cloned()\n                    .unwrap_or_else(|| \"unknown\".to_string());\n                let module_path = path_segments\n                    .iter()\n                    .take(path_segments.len().saturating_sub(1))\n                    .cloned()\n                    .collect::<Vec<_>>()\n                    .join(\"::\");\n\n                let mut generic_args = Vec::new();\n                for subst in substs.iter() {\n                    if let GenericArgKind::Type(ty) = subst.unpack() {\n                        if let Some(arg_info) = self.extract_type_origin_info_from_ty(ty) {\n                            generic_args.push(arg_info);\n                        }\n                    }\n                }\n\n                let full_type_name = if !generic_args.is_empty() {\n                    let generic_names: Vec<String> =\n                        generic_args.iter().map(|g| g.type_name.clone()).collect();\n                    format!(\"{}<{}>\", type_name, generic_names.join(\", \"))\n                } else {\n                    type_name.clone()\n                };\n\n                Some(TypeOriginInfo {\n                    type_name: full_type_name,\n                    crate_name,\n                    module_path,\n                    generic_args,\n                    is_generic_param: false,\n                    src_location: \"\".to_string(),\n                })\n            }\n            TyKind::Foreign(def_id) => {\n                let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n                let def_path = self.tcx.def_path(*def_id);\n\n                let mut path_segments = Vec::new();\n                for data in &def_path.data {\n                    path_segments.push(data.data.to_string());\n                }\n\n                let type_name = path_segments\n                    .last()\n                    .cloned()\n                    .unwrap_or_else(|| \"unknown\".to_string());\n                let module_path = path_segments\n                    .iter()\n                    .take(path_segments.len().saturating_sub(1))\n                    .cloned()\n                    .collect::<Vec<_>>()\n                    .join(\"::\");\n\n                Some(TypeOriginInfo {\n                    type_name,\n                    crate_name,\n                    module_path,\n                    generic_args: Vec::new(),\n                    is_generic_param: false,\n                    src_location: \"\".to_string(),\n                })\n            }\n            TyKind::Str => Some(TypeOriginInfo {\n                type_name: \"str\".to_string(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n            TyKind::Array(element_ty, len) => {\n                if let Some(element_info) = self.extract_type_origin_info_from_ty(*element_ty) {\n                    let array_len = match len.kind() {\n                        ConstKind::Value(val, _) => format!(\"{:?}\", val),\n                        _ => \"?\".to_string(),\n                    };\n\n                    Some(TypeOriginInfo {\n                        type_name: format!(\"[{}; {}]\", element_info.type_name, array_len),\n                        crate_name: \"core\".to_string(),\n                        module_path: \"array\".to_string(),\n                        generic_args: vec![element_info],\n                        is_generic_param: false,\n                        src_location: \"\".to_string(),\n                    })\n                } else {\n                    None\n                }\n            }\n            TyKind::Slice(element_ty) => {\n                if let Some(element_info) = self.extract_type_origin_info_from_ty(*element_ty) {\n                    Some(TypeOriginInfo {\n                        type_name: format!(\"[{}]\", element_info.type_name),\n                        crate_name: \"core\".to_string(),\n                        module_path: \"slice\".to_string(),\n                        generic_args: vec![element_info],\n                        is_generic_param: false,\n                        src_location: \"\".to_string(),\n                    })\n                } else {\n                    None\n                }\n            }\n            TyKind::RawPtr(ty_and_mut, _) => {\n                if let Some(pointee_info) = self.extract_type_origin_info_from_ty(*ty_and_mut) {\n                    let mutability = if ty_and_mut.is_adt() { \"mut\" } else { \"const\" };\n                    Some(TypeOriginInfo {\n                        type_name: format!(\"*{} {}\", mutability, pointee_info.type_name),\n                        crate_name: \"core\".to_string(),\n                        module_path: \"primitive\".to_string(),\n                        generic_args: vec![pointee_info],\n                        is_generic_param: false,\n                        src_location: \"\".to_string(),\n                    })\n                } else {\n                    None\n                }\n            }\n            TyKind::Ref(region, ty, mutbl) => {\n                if let Some(referenced_info) = self.extract_type_origin_info_from_ty(*ty) {\n                    let mutability = if mutbl.is_mut() { \"mut\" } else { \"\" };\n                    let lifetime = match region.kind() {\n                        RegionKind::ReStatic => \"'static\",\n                        _ => \"'_\",\n                    };\n\n                    Some(TypeOriginInfo {\n                        type_name: format!(\n                            \"&{} {}{}{}\",\n                            lifetime,\n                            if !mutability.is_empty() {\n                                mutability\n                            } else {\n                                \"\"\n                            },\n                            if !mutability.is_empty() { \" \" } else { \"\" },\n                            referenced_info.type_name\n                        ),\n                        crate_name: \"core\".to_string(),\n                        module_path: \"primitive\".to_string(),\n                        generic_args: vec![referenced_info],\n                        is_generic_param: false,\n                        src_location: \"\".to_string(),\n                    })\n                } else {\n                    None\n                }\n            }\n            TyKind::FnDef(def_id, substs) => {\n                let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n                let def_path = self.tcx.def_path(*def_id);\n\n                let mut path_segments = Vec::new();\n                for data in &def_path.data {\n                    path_segments.push(data.data.to_string());\n                }\n\n                let fn_name = path_segments\n                    .last()\n                    .cloned()\n                    .unwrap_or_else(|| \"unknown\".to_string());\n                let module_path = path_segments\n                    .iter()\n                    .take(path_segments.len().saturating_sub(1))\n                    .cloned()\n                    .collect::<Vec<_>>()\n                    .join(\"::\");\n\n                let fn_sig = self.tcx.fn_sig(*def_id);\n                let sig = fn_sig.skip_binder();\n\n                let mut param_types = Vec::new();\n                for param_ty in sig.inputs().iter() {\n                    if let Some(param_info) =\n                        self.extract_type_origin_info_from_ty(*param_ty.skip_binder())\n                    {\n                        param_types.push(param_info);\n                    }\n                }\n\n                let mut return_type = None;\n                if let Some(ret_info) =\n                    self.extract_type_origin_info_from_ty(sig.output().skip_binder())\n                {\n                    return_type = Some(ret_info);\n                }\n\n                let fn_type_name = format!(\n                    \"fn({}) -> {}\",\n                    param_types\n                        .iter()\n                        .map(|p| p.type_name.clone())\n                        .collect::<Vec<_>>()\n                        .join(\", \"),\n                    return_type\n                        .as_ref()\n                        .map_or(\"()\".to_string(), |t| t.type_name.clone())\n                );\n\n                let mut generic_args = param_types;\n                if let Some(ret) = return_type {\n                    generic_args.push(ret);\n                }\n\n                Some(TypeOriginInfo {\n                    type_name: fn_type_name,\n                    crate_name,\n                    module_path,\n                    generic_args,\n                    is_generic_param: false,\n                    src_location: \"\".to_string(),\n                })\n            }\n            TyKind::FnPtr(poly_fn_sig) => {\n                let fn_sig = poly_fn_sig.skip_binder();\n\n                let mut param_types = Vec::new();\n                for param_ty in fn_sig.inputs().iter() {\n                    if let Some(param_info) = self.extract_type_origin_info_from_ty(*param_ty) {\n                        param_types.push(param_info);\n                    }\n                }\n\n                let mut return_type = None;\n                if let Some(ret_info) = self.extract_type_origin_info_from_ty(fn_sig.output()) {\n                    return_type = Some(ret_info);\n                }\n\n                let fn_type_name = format!(\n                    \"fn({}) -> {}\",\n                    param_types\n                        .iter()\n                        .map(|p| p.type_name.clone())\n                        .collect::<Vec<_>>()\n                        .join(\", \"),\n                    return_type\n                        .as_ref()\n                        .map_or(\"()\".to_string(), |t| t.type_name.clone())\n                );\n\n                let mut generic_args = param_types;\n                if let Some(ret) = return_type {\n                    generic_args.push(ret);\n                }\n\n                Some(TypeOriginInfo {\n                    type_name: fn_type_name,\n                    crate_name: \"core\".to_string(),\n                    module_path: \"primitive\".to_string(),\n                    generic_args,\n                    is_generic_param: false,\n                    src_location: \"\".to_string(),\n                })\n            }\n            TyKind::Closure(def_id, substs) => {\n                // In Rust 1.88, closure signature access might have changed\n                let closure_sig = substs.as_closure().sig();\n                let sig = closure_sig.skip_binder();\n\n                let mut param_types = Vec::new();\n                for param_ty in sig.inputs().iter() {\n                    if let Some(param_info) = self.extract_type_origin_info_from_ty(*param_ty) {\n                        param_types.push(param_info);\n                    }\n                }\n\n                let mut return_type = None;\n                if let Some(ret_info) = self.extract_type_origin_info_from_ty(sig.output()) {\n                    return_type = Some(ret_info);\n                }\n\n                let path_str = self.tcx.def_path_str(*def_id);\n\n                let closure_type_name = format!(\n                    \"Closure<({}) -> {}>\",\n                    param_types\n                        .iter()\n                        .map(|p| p.type_name.clone())\n                        .collect::<Vec<_>>()\n                        .join(\", \"),\n                    return_type\n                        .as_ref()\n                        .map_or(\"()\".to_string(), |t| t.type_name.clone())\n                );\n\n                let mut generic_args = param_types;\n                if let Some(ret) = return_type {\n                    generic_args.push(ret);\n                }\n\n                Some(TypeOriginInfo {\n                    type_name: closure_type_name,\n                    crate_name: self.tcx.crate_name(def_id.krate).to_string(),\n                    module_path: path_str,\n                    generic_args,\n                    is_generic_param: false,\n                    src_location: \"\".to_string(),\n                })\n            }\n            TyKind::Tuple(tys) => {\n                let mut tuple_elements = Vec::new();\n                for ty in tys.iter() {\n                    if let Some(element_info) = self.extract_type_origin_info_from_ty(ty) {\n                        tuple_elements.push(element_info);\n                    }\n                }\n\n                let tuple_type_name = if tuple_elements.is_empty() {\n                    \"()\".to_string()\n                } else {\n                    let element_names: Vec<String> =\n                        tuple_elements.iter().map(|e| e.type_name.clone()).collect();\n                    format!(\"({})\", element_names.join(\", \"))\n                };\n\n                Some(TypeOriginInfo {\n                    type_name: tuple_type_name,\n                    crate_name: \"core\".to_string(),\n                    module_path: \"primitive\".to_string(),\n                    generic_args: tuple_elements,\n                    is_generic_param: false,\n                    src_location: \"\".to_string(),\n                })\n            }\n            TyKind::Param(param_ty) => Some(TypeOriginInfo {\n                type_name: param_ty.name.to_string(),\n                crate_name: \"\".to_string(),\n                module_path: \"\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: true,\n                src_location: \"\".to_string(),\n            }),\n            _ => Some(TypeOriginInfo {\n                type_name: format!(\"{:?}\", ty),\n                crate_name: \"unknown\".to_string(),\n                module_path: \"unknown\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            }),\n        }\n    }\n\n    pub fn analyze_body(\n        &self,\n        body: &'tcx rustc_hir::Body<'tcx>,\n    ) -> (\n        Vec<CalledFunctionInfo>,\n        Vec<CalledFunctionInfo>,\n        Vec<TypeOriginInfo>,\n        Vec<LiteralInfo>,\n        HashMap<String, Function>,\n    ) {\n        struct BodyCollector<'a, 'tcx> {\n            tcx: TyCtxt<'tcx>,\n            functions_called: Vec<CalledFunctionInfo>,\n            methods_called: Vec<CalledFunctionInfo>,\n            types_used: HashSet<TypeOriginInfo>,\n            literals_used: Vec<LiteralInfo>,\n            where_functions: HashMap<String, Function>,\n            closure_count: usize,\n            parent_collector: &'a CallgraphVisitor<'tcx>,\n        }\n\n        impl<'a, 'tcx> Visitor<'tcx> for BodyCollector<'a, 'tcx> {\n            fn visit_expr(&mut self, expr: &'tcx rustc_hir::Expr<'tcx>) {\n                let def_id = expr.hir_id.owner.to_def_id();\n                // let typeck = self.tcx.typeck(def_id);\n                let typeck = if def_id.is_local() {\n                    // Convert to LocalDefId for typeck\n                    self.tcx.typeck(def_id.as_local().unwrap())\n                } else {\n                    // For non-local definitions, you might need to handle differently\n                    panic!(\"Cannot perform type checking on non-local definitions\")\n                    // Or find an alternative approach for non-local defs\n                };\n                let expr_ty = typeck.expr_ty(expr);\n\n                // Add the expression type to types_used\n                if let Some(type_info) = self\n                    .parent_collector\n                    .extract_type_origin_info_from_ty(expr_ty)\n                {\n                    self.types_used.insert(type_info);\n                }\n\n                match &expr.kind {\n                    // Function calls\n                    rustc_hir::ExprKind::Call(func, args) => {\n                        if let rustc_hir::ExprKind::Path(qpath) = &func.kind {\n                            let res = typeck.qpath_res(qpath, func.hir_id);\n\n                            if let Some(def_id) = res.opt_def_id() {\n                                let fn_name = self.tcx.def_path_str(def_id);\n                                let span = func.span;\n\n                                // Extract origin information\n                                let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n                                let def_path = self.tcx.def_path(def_id);\n                                let module_path = def_path\n                                    .data\n                                    .iter()\n                                    .take(def_path.data.len().saturating_sub(1))\n                                    .map(|x| x.data.to_string())\n                                    .collect::<Vec<_>>()\n                                    .join(\"::\");\n\n                                // Get function inputs/outputs\n                                let mut input_types = Vec::new();\n                                let mut output_types = Vec::new();\n\n                                let fn_ty = self.tcx.type_of(def_id).skip_binder();\n                                if let TyKind::FnDef(_, _) = fn_ty.kind() {\n                                    let fn_sig = self.tcx.fn_sig(def_id);\n                                    let sig = fn_sig.skip_binder();\n\n                                    // Get input types\n                                    for arg_ty in sig.inputs().iter() {\n                                        if let Some(type_info) = self\n                                            .parent_collector\n                                            .extract_type_origin_info_from_ty(*arg_ty.skip_binder())\n                                        {\n                                            input_types.push(type_info);\n                                        }\n                                    }\n\n                                    // Get output type\n                                    if let Some(output_info) =\n                                        self.parent_collector.extract_type_origin_info_from_ty(\n                                            sig.output().skip_binder(),\n                                        )\n                                    {\n                                        output_types.push(output_info);\n                                    }\n                                }\n\n                                let name =\n                                    fn_name.split(\"::\").last().unwrap_or(&fn_name).to_string();\n\n                                self.functions_called.push(CalledFunctionInfo {\n                                    name,\n                                    fully_qualified_path: fn_name,\n                                    is_method: false,\n                                    receiver_type: None,\n                                    input_types,\n                                    output_types,\n                                    src_location: self.parent_collector.format_span(span),\n                                    line_number: self.parent_collector.get_line_number(span),\n                                    column_number: self.parent_collector.get_column_number(span),\n                                    origin_crate: crate_name,\n                                    origin_module: module_path,\n                                    call_type: \"function\".to_string(),\n                                });\n                            }\n                        }\n                    }\n\n                    // Method calls\n                    rustc_hir::ExprKind::MethodCall(path, receiver, args, span) => {\n                        let method_name = path.ident.to_string();\n                        let span = path.ident.span;\n\n                        // Get receiver type\n                        let receiver_ty = typeck.expr_ty(receiver);\n                        let receiver_type = self\n                            .parent_collector\n                            .extract_type_origin_info_from_ty(receiver_ty);\n\n                        // Get method definition\n                        if let Some(def_id) = typeck.type_dependent_def_id(expr.hir_id) {\n                            let method_full_name = self.tcx.def_path_str(def_id);\n\n                            // Extract origin information\n                            let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n                            let def_path = self.tcx.def_path(def_id);\n                            let module_path = def_path\n                                .data\n                                .iter()\n                                .take(def_path.data.len().saturating_sub(1))\n                                .map(|x| x.data.to_string())\n                                .collect::<Vec<_>>()\n                                .join(\"::\");\n\n                            // Get method inputs/outputs\n                            let mut input_types = Vec::new();\n                            let mut output_types = Vec::new();\n\n                            let fn_ty = self.tcx.type_of(def_id).skip_binder();\n                            if let TyKind::FnDef(_, _) = fn_ty.kind() {\n                                let fn_sig = self.tcx.fn_sig(def_id);\n                                let sig = fn_sig.skip_binder();\n\n                                // Skip the first input (self)\n                                for arg_ty in sig.inputs().iter().skip(1) {\n                                    if let Some(type_info) = self\n                                        .parent_collector\n                                        .extract_type_origin_info_from_ty(*arg_ty.skip_binder())\n                                    {\n                                        input_types.push(type_info);\n                                    }\n                                }\n\n                                // Get output type\n                                if let Some(output_info) = self\n                                    .parent_collector\n                                    .extract_type_origin_info_from_ty(sig.output().skip_binder())\n                                {\n                                    output_types.push(output_info);\n                                }\n                            }\n\n                            self.methods_called.push(CalledFunctionInfo {\n                                name: method_name,\n                                fully_qualified_path: method_full_name,\n                                is_method: true,\n                                receiver_type,\n                                input_types,\n                                output_types,\n                                src_location: self.parent_collector.format_span(span),\n                                line_number: self.parent_collector.get_line_number(span),\n                                column_number: self.parent_collector.get_column_number(span),\n                                origin_crate: crate_name,\n                                origin_module: module_path,\n                                call_type: \"method\".to_string(),\n                            });\n                        }\n                    }\n\n                    // Literals\n                    rustc_hir::ExprKind::Lit(lit) => {\n                        let span = lit.span;\n                        let lit_value = self\n                            .tcx\n                            .sess\n                            .source_map()\n                            .span_to_snippet(span)\n                            .unwrap_or_else(|_| \"<<literal value unavailable>>\".to_string());\n\n                        let lit_type = match expr_ty.kind() {\n                            TyKind::Int(_) => \"integer\".to_string(),\n                            TyKind::Uint(_) => \"unsigned integer\".to_string(),\n                            TyKind::Float(_) => \"float\".to_string(),\n                            TyKind::Bool => \"boolean\".to_string(),\n                            TyKind::Char => \"char\".to_string(),\n                            TyKind::Str => \"string\".to_string(),\n                            _ => format!(\"{:?}\", expr_ty.kind()),\n                        };\n\n                        self.literals_used.push(LiteralInfo {\n                            value: lit_value,\n                            literal_type: lit_type,\n                            span: self.parent_collector.format_span(span),\n                            line_number: self.parent_collector.get_line_number(span),\n                            column_number: self.parent_collector.get_column_number(span),\n                        });\n                    }\n\n                    // Closures\n                    rustc_hir::ExprKind::Closure(&rustc_hir::Closure { body, .. }) => {\n                        self.closure_count += 1;\n                        let closure_name = format!(\"closure_{}\", self.closure_count);\n\n                        let body = self.tcx.hir().body(body); //self.tcx.hir_body(body);\n                        let closure_ty = typeck.expr_ty(expr);\n\n                        let mut child_collector = BodyCollector {\n                            tcx: self.tcx,\n                            functions_called: Vec::new(),\n                            methods_called: Vec::new(),\n                            types_used: HashSet::new(),\n                            literals_used: Vec::new(),\n                            where_functions: HashMap::new(),\n                            closure_count: 0,\n                            parent_collector: self.parent_collector,\n                        };\n\n                        child_collector.visit_expr(&body.value);\n\n                        // Build inputs/outputs\n                        let mut input_types = Vec::new();\n                        let mut output_types = Vec::new();\n\n                        if let TyKind::Closure(def_id, substs) = closure_ty.kind() {\n                            let closure_sig = substs.as_closure().sig();\n                            let sig = closure_sig.skip_binder();\n\n                            // Get input types\n                            for arg_ty in sig.inputs().iter() {\n                                if let Some(type_info) = self\n                                    .parent_collector\n                                    .extract_type_origin_info_from_ty(*arg_ty)\n                                {\n                                    input_types.push(type_info);\n                                }\n                            }\n\n                            // Get output type\n                            if let Some(output_info) = self\n                                .parent_collector\n                                .extract_type_origin_info_from_ty(sig.output())\n                            {\n                                output_types.push(output_info);\n                            }\n                        }\n\n                        let span = expr.span;\n                        let closure_src = self\n                            .tcx\n                            .sess\n                            .source_map()\n                            .span_to_snippet(span)\n                            .unwrap_or_else(|_| \"<<closure source unavailable>>\".to_string());\n\n                        let line_start = self.parent_collector.get_line_number(span);\n                        let line_end = self.tcx.sess.source_map().lookup_char_pos(span.hi()).line;\n                        let attributes = self.parent_collector.get_attrs_string(body.id().hir_id);\n                        let closure_info = Function {\n                            name: closure_name.clone(),\n                            fully_qualified_path: closure_name.clone(),\n                            is_method: false,\n                            self_type: None,\n                            input_types,\n                            output_types,\n                            types_used: child_collector.types_used.into_iter().collect(),\n                            literals_used: child_collector.literals_used,\n                            functions_called: child_collector.functions_called,\n                            methods_called: child_collector.methods_called,\n                            where_functions: child_collector.where_functions,\n                            src_location: self.parent_collector.format_span(span),\n                            src_code: closure_src,\n                            line_number_start: line_start,\n                            line_number_end: line_end,\n                            crate_name: \"local\".to_string(),\n                            module_path: \"closure\".to_string(),\n                            visibility: \"private\".to_string(),\n                            doc_comments: \"\".to_string(),\n                            attributes: attributes,\n                        };\n\n                        self.where_functions.insert(closure_name, closure_info);\n                    }\n\n                    _ => {}\n                }\n\n                // Recursively visit child expressions\n                walk_expr(self, expr);\n            }\n        }\n\n        let mut collector = BodyCollector {\n            tcx: self.tcx,\n            functions_called: Vec::new(),\n            methods_called: Vec::new(),\n            types_used: HashSet::new(),\n            literals_used: Vec::new(),\n            where_functions: HashMap::new(),\n            closure_count: 0,\n            parent_collector: self,\n        };\n\n        collector.visit_expr(&body.value);\n\n        (\n            collector.functions_called,\n            collector.methods_called,\n            collector.types_used.into_iter().collect(),\n            collector.literals_used,\n            collector.where_functions,\n        )\n    }\n\n    pub fn process_function_data(\n        &mut self,\n        sig: &rustc_hir::FnSig<'tcx>,\n        hir_id: HirId,\n        body_id: BodyId,\n        span: Span,\n    ) {\n        let def_id = hir_id.owner.to_def_id();\n\n        // Skip if not a local function\n        if !def_id.is_local() {\n            return;\n        }\n\n        let function_name = self.tcx.item_name(def_id).to_string();\n        let crate_name = self.tcx.crate_name(def_id.krate).to_string();\n        let module_path = self.current_module_path();\n\n        // Get fully qualified path\n        let fully_qualified_path = if module_path.is_empty() {\n            format!(\"{}::{}\", crate_name, function_name)\n        } else {\n            format!(\"{}::{}::{}\", crate_name, module_path, function_name)\n        };\n        // println!(\"{:?}\",fully_qualified_path);\n\n        // Source location info\n        let src_loc = self.format_span(span);\n        let src_code = self\n            .tcx\n            .sess\n            .source_map()\n            .span_to_snippet(span)\n            .unwrap_or_else(|_| \"<<source unavailable>>\".to_string());\n\n        let line_start = self.get_line_number(span);\n        let line_end = self.tcx.sess.source_map().lookup_char_pos(span.hi()).line;\n\n        // Check if this is a method (simplified)\n        let is_method = self.tcx.impl_of_method(def_id).is_some();\n        let self_type = None; // Simplified\n\n        let mut input_types = Vec::new();\n        for param in sig.decl.inputs.iter() {\n            if let Some(type_info) = self.extract_type_origin_info(param) {\n                input_types.push(type_info);\n            }\n        }\n\n        // Extract function outputs\n        let mut output_types = Vec::new();\n        if let rustc_hir::FnRetTy::Return(ty) = &sig.decl.output {\n            if let Some(type_info) = self.extract_type_origin_info(*ty) {\n                output_types.push(type_info);\n            }\n        } else {\n            // Add unit type for default return\n            output_types.push(TypeOriginInfo {\n                type_name: \"()\".to_string(),\n                crate_name: \"core\".to_string(),\n                module_path: \"primitive\".to_string(),\n                generic_args: Vec::new(),\n                is_generic_param: false,\n                src_location: \"\".to_string(),\n            });\n        }\n\n        // Extract additional metadata\n        let visibility = self.extract_visibility(hir_id.owner);\n        let doc_comments = self.extract_doc_comments(hir_id);\n        let attributes = self.get_attrs_string(hir_id);\n\n        // self.tcx.get_attrs(hir_id.owner.to_def_id(),rustc_span::sym::TyCtxt)\n        // let body = self.tcx.thir_body(body_id);\n        let body = self.tcx.hir().body(body_id);\n\n        // Collect function calls, method calls, literals, and types used\n        let (functions_called, methods_called, types_used, literals_used, where_functions) =\n            self.analyze_body(body);\n\n        // Create function data\n        let function_info = Function {\n            name: function_name,\n            fully_qualified_path,\n            is_method,\n            self_type,\n            input_types,\n            output_types,\n            types_used: types_used,\n            literals_used: literals_used,\n            functions_called: functions_called,\n            methods_called: methods_called,\n            where_functions: where_functions,\n            src_location: src_loc,\n            src_code,\n            line_number_start: line_start,\n            line_number_end: line_end,\n            crate_name,\n            module_path,\n            visibility,\n            doc_comments,\n            attributes,\n        };\n        // println!(\"{:?}\",function_info);\n        self.function_data.push(function_info);\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "impl intravisit::Visitor<'tcx> for CallgraphVisitor<'tcx>",
+      "kind": "Object",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 1376,
+          "character": 0
+        },
+        "end": {
+          "line": 1501,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 1376,
+          "character": 41
+        },
+        "end": {
+          "line": 1376,
+          "character": 63
+        }
+      },
+      "children": [
+        {
+          "name": "NestedFilter",
+          "detail": "nested_filter::OnlyBodies",
+          "kind": 26,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 1377,
+              "character": 4
+            },
+            "end": {
+              "line": 1377,
+              "character": 50
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 1377,
+              "character": 9
+            },
+            "end": {
+              "line": 1377,
+              "character": 21
+            }
+          }
+        },
+        {
+          "name": "nested_visit_map",
+          "detail": "fn(&mut self) -> Self::Map",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 1379,
+              "character": 4
+            },
+            "end": {
+              "line": 1381,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 1379,
+              "character": 7
+            },
+            "end": {
+              "line": 1379,
+              "character": 23
+            }
+          }
+        },
+        {
+          "name": "visit_item",
+          "detail": "fn(&mut self, item: &'tcx rustc_hir::Item<'_>)",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 1383,
+              "character": 4
+            },
+            "end": {
+              "line": 1439,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 1383,
+              "character": 7
+            },
+            "end": {
+              "line": 1383,
+              "character": 17
+            }
+          }
+        },
+        {
+          "name": "visit_trait_item",
+          "detail": "fn(&mut self, ti: &'tcx rustc_hir::TraitItem<'_>)",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 1441,
+              "character": 4
+            },
+            "end": {
+              "line": 1460,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 1441,
+              "character": 7
+            },
+            "end": {
+              "line": 1441,
+              "character": 23
+            }
+          }
+        },
+        {
+          "name": "visit_impl_item",
+          "detail": "fn(&mut self, ii: &'tcx rustc_hir::ImplItem<'_>)",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 1462,
+              "character": 4
+            },
+            "end": {
+              "line": 1500,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 1462,
+              "character": 7
+            },
+            "end": {
+              "line": 1462,
+              "character": 22
+            }
+          }
+        }
+      ],
+      "code_string": "impl<'tcx> intravisit::Visitor<'tcx> for CallgraphVisitor<'tcx> {\n    type NestedFilter = nested_filter::OnlyBodies;\n\n    fn nested_visit_map(&mut self) -> Self::Map {\n        self.tcx.hir()\n    }\n\n    fn visit_item(&mut self, item: &'tcx rustc_hir::Item<'_>) {\n        // skip_generated_code!(item.span);\n        let hir_id = item.hir_id();\n        // println!(\"{:?}\",hir_id);\n\n        // Handle modules - track module path for better function organization\n        if let rustc_hir::ItemKind::Mod(module) = &item.kind {\n            let def_id = hir_id.owner.to_def_id();\n\n            // Push module to stack\n            self.push_module(self.format_span(module.spans.inner_span));\n\n            // Process module items\n            intravisit::walk_item(self, item);\n\n            // Pop module from stack\n            self.pop_module();\n\n            return;\n        }\n\n        if let rustc_hir::ItemKind::Fn(sig, generics, body_id) = item.kind {\n            let def_id = hir_id.owner.to_def_id();\n            self.process_function_data(&sig, hir_id, body_id, item.span);\n\n            push_walk_pop!(self, def_id, intravisit::walk_item(self, item));\n\n            return;\n        }\n        if let rustc_hir::ItemKind::Trait(is_auto, unsafety, generics, _bounds, trait_items_) =\n            item.kind\n        {\n            let def_id = hir_id.owner.to_def_id();\n\n            // Process all trait items\n            for trait_item_ref in trait_items_ {\n                let trait_item = self.tcx.hir().trait_item(trait_item_ref.id);\n                self.visit_trait_item(trait_item);\n            }\n\n            push_walk_pop!(self, def_id, intravisit::walk_item(self, item));\n\n            return;\n        }\n\n        if let rustc_hir::ItemKind::Impl(impl_) = item.kind {\n            let def_id = hir_id.owner.to_def_id();\n            for impl_item_ref in impl_.items {\n                let impl_item = self.tcx.hir().impl_item(impl_item_ref.id);\n                self.visit_impl_item(impl_item);\n            }\n            push_walk_pop!(self, def_id, intravisit::walk_item(self, item));\n            return;\n        }\n        // traverse\n        intravisit::walk_item(self, item)\n    }\n\n    fn visit_trait_item(&mut self, ti: &'tcx rustc_hir::TraitItem<'_>) {\n        skip_generated_code!(ti.span);\n\n        let hir_id = ti.hir_id();\n        let def_id = hir_id.owner.to_def_id();\n\n        match ti.kind {\n            rustc_hir::TraitItemKind::Fn(sig, rustc_hir::TraitFn::Provided(body_id)) => {\n                self.process_function_data(&sig, hir_id, body_id, ti.span);\n\n                push_walk_pop!(self, def_id, intravisit::walk_trait_item(self, ti));\n\n                return;\n            }\n            _ => {}\n        }\n\n        // traverse\n        intravisit::walk_trait_item(self, ti)\n    }\n\n    fn visit_impl_item(&mut self, ii: &'tcx rustc_hir::ImplItem<'_>) {\n        // skip_generated_code!(ii.span);\n\n        let hir_id = ii.hir_id();\n        let def_id = hir_id.owner.to_def_id();\n\n        if let rustc_hir::ImplItemKind::Fn(sig, body_id) = ii.kind {\n            // Process impl method data\n            self.process_function_data(&sig, hir_id, body_id, ii.span);\n\n            // store link to decl\n            let mut decl_id = None;\n            if let Some(impl_id) = self.tcx.impl_of_method(def_id) {\n                if let Some(rustc_hir::Node::Item(item)) = self.tcx.hir().get_if_local(impl_id) {\n                    if let rustc_hir::ItemKind::Impl(impl_) = &item.kind {\n                        // the next one filters methods that are just associated\n                        // and do not belong to a struct\n                        if let Some(trait_def_id) = self.tcx.trait_id_of_impl(impl_id) {\n                            let item = self\n                                .tcx\n                                .associated_items(trait_def_id)\n                                .filter_by_name_unhygienic(ii.ident.name)\n                                .next(); // There should ideally be only one item matching the name\n                            if let Some(item) = item {\n                                decl_id = Some(item.def_id);\n                            };\n                        }\n                    }\n                }\n            }\n\n            push_walk_pop!(self, def_id, intravisit::walk_impl_item(self, ii));\n\n            return;\n        }\n\n        // traverse\n        intravisit::walk_impl_item(self, ii)\n    }\n}",
+      "references": []
+    }
+  ]
+]
