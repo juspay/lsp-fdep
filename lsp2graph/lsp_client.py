@@ -1,8 +1,3 @@
-"""
-LSP Client - Python implementation for Language Server Protocol interactions
-Based on the MCP Language Server project structure
-"""
-
 import json
 import asyncio
 import subprocess
@@ -12,7 +7,6 @@ import uuid
 import time
 import logging
 from typing import Dict, List, Any, Optional, Callable, Union, Tuple
-from dataclasses import dataclass, asdict
 from enum import Enum
 from pathlib import Path
 import urllib.parse
@@ -30,7 +24,6 @@ class LSPMessageType(Enum):
     NOTIFICATION = "notification"
 
 
-@dataclass
 class Position(BaseModel):
     """LSP Position structure"""
 
@@ -38,7 +31,6 @@ class Position(BaseModel):
     character: int  # 0-based
 
 
-@dataclass
 class Range(BaseModel):
     """LSP Range structure"""
 
@@ -46,7 +38,6 @@ class Range(BaseModel):
     end: Position
 
 
-@dataclass
 class Location(BaseModel):
     """LSP Location structure"""
 
@@ -54,7 +45,6 @@ class Location(BaseModel):
     range: Range
 
 
-@dataclass
 class TextEdit(BaseModel):
     """LSP TextEdit structure"""
 
@@ -62,7 +52,6 @@ class TextEdit(BaseModel):
     newText: str
 
 
-@dataclass
 class Diagnostic(BaseModel):
     """LSP Diagnostic structure"""
 
@@ -73,7 +62,6 @@ class Diagnostic(BaseModel):
     source: Optional[str] = None
 
 
-@dataclass
 class LSPMessage(BaseModel):
     """LSP Message structure"""
 
@@ -702,7 +690,6 @@ class LSPClient:
 
         if not result:
             return []
-
         return [
             Location(
                 uri=loc["uri"],
@@ -1185,5 +1172,4 @@ class LSPTools:
 
         except Exception as e:
             result += f"Error reading file: {e}\n"
-
         return result

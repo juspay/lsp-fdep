@@ -2766,5 +2766,1249 @@
       "code_string": "impl<'tcx> intravisit::Visitor<'tcx> for CallgraphVisitor<'tcx> {\n    type NestedFilter = nested_filter::OnlyBodies;\n\n    fn nested_visit_map(&mut self) -> Self::Map {\n        self.tcx.hir()\n    }\n\n    fn visit_item(&mut self, item: &'tcx rustc_hir::Item<'_>) {\n        // skip_generated_code!(item.span);\n        let hir_id = item.hir_id();\n        // println!(\"{:?}\",hir_id);\n\n        // Handle modules - track module path for better function organization\n        if let rustc_hir::ItemKind::Mod(module) = &item.kind {\n            let def_id = hir_id.owner.to_def_id();\n\n            // Push module to stack\n            self.push_module(self.format_span(module.spans.inner_span));\n\n            // Process module items\n            intravisit::walk_item(self, item);\n\n            // Pop module from stack\n            self.pop_module();\n\n            return;\n        }\n\n        if let rustc_hir::ItemKind::Fn(sig, generics, body_id) = item.kind {\n            let def_id = hir_id.owner.to_def_id();\n            self.process_function_data(&sig, hir_id, body_id, item.span);\n\n            push_walk_pop!(self, def_id, intravisit::walk_item(self, item));\n\n            return;\n        }\n        if let rustc_hir::ItemKind::Trait(is_auto, unsafety, generics, _bounds, trait_items_) =\n            item.kind\n        {\n            let def_id = hir_id.owner.to_def_id();\n\n            // Process all trait items\n            for trait_item_ref in trait_items_ {\n                let trait_item = self.tcx.hir().trait_item(trait_item_ref.id);\n                self.visit_trait_item(trait_item);\n            }\n\n            push_walk_pop!(self, def_id, intravisit::walk_item(self, item));\n\n            return;\n        }\n\n        if let rustc_hir::ItemKind::Impl(impl_) = item.kind {\n            let def_id = hir_id.owner.to_def_id();\n            for impl_item_ref in impl_.items {\n                let impl_item = self.tcx.hir().impl_item(impl_item_ref.id);\n                self.visit_impl_item(impl_item);\n            }\n            push_walk_pop!(self, def_id, intravisit::walk_item(self, item));\n            return;\n        }\n        // traverse\n        intravisit::walk_item(self, item)\n    }\n\n    fn visit_trait_item(&mut self, ti: &'tcx rustc_hir::TraitItem<'_>) {\n        skip_generated_code!(ti.span);\n\n        let hir_id = ti.hir_id();\n        let def_id = hir_id.owner.to_def_id();\n\n        match ti.kind {\n            rustc_hir::TraitItemKind::Fn(sig, rustc_hir::TraitFn::Provided(body_id)) => {\n                self.process_function_data(&sig, hir_id, body_id, ti.span);\n\n                push_walk_pop!(self, def_id, intravisit::walk_trait_item(self, ti));\n\n                return;\n            }\n            _ => {}\n        }\n\n        // traverse\n        intravisit::walk_trait_item(self, ti)\n    }\n\n    fn visit_impl_item(&mut self, ii: &'tcx rustc_hir::ImplItem<'_>) {\n        // skip_generated_code!(ii.span);\n\n        let hir_id = ii.hir_id();\n        let def_id = hir_id.owner.to_def_id();\n\n        if let rustc_hir::ImplItemKind::Fn(sig, body_id) = ii.kind {\n            // Process impl method data\n            self.process_function_data(&sig, hir_id, body_id, ii.span);\n\n            // store link to decl\n            let mut decl_id = None;\n            if let Some(impl_id) = self.tcx.impl_of_method(def_id) {\n                if let Some(rustc_hir::Node::Item(item)) = self.tcx.hir().get_if_local(impl_id) {\n                    if let rustc_hir::ItemKind::Impl(impl_) = &item.kind {\n                        // the next one filters methods that are just associated\n                        // and do not belong to a struct\n                        if let Some(trait_def_id) = self.tcx.trait_id_of_impl(impl_id) {\n                            let item = self\n                                .tcx\n                                .associated_items(trait_def_id)\n                                .filter_by_name_unhygienic(ii.ident.name)\n                                .next(); // There should ideally be only one item matching the name\n                            if let Some(item) = item {\n                                decl_id = Some(item.def_id);\n                            };\n                        }\n                    }\n                }\n            }\n\n            push_walk_pop!(self, def_id, intravisit::walk_impl_item(self, ii));\n\n            return;\n        }\n\n        // traverse\n        intravisit::walk_impl_item(self, ii)\n    }\n}",
       "references": []
     }
+  ],
+  [
+    {
+      "name": "show_error",
+      "detail": "fn(msg: impl AsRef<str>) -> !",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 16,
+          "character": 0
+        },
+        "end": {
+          "line": 19,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 16,
+          "character": 3
+        },
+        "end": {
+          "line": 16,
+          "character": 13
+        }
+      },
+      "code_string": "fn show_error(msg: impl AsRef<str>) -> ! {\n    println!(\"{}\", msg.as_ref());\n    std::process::exit(1)\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 16,
+              "character": 0
+            },
+            "end": {
+              "line": 16,
+              "character": 2
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 18,
+              "character": 4
+            },
+            "end": {
+              "line": 18,
+              "character": 25
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "has_arg_flag",
+      "detail": "fn(name: &str) -> bool",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 21,
+          "character": 0
+        },
+        "end": {
+          "line": 26,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 22,
+          "character": 3
+        },
+        "end": {
+          "line": 22,
+          "character": 15
+        }
+      },
+      "code_string": "// Determines whether a `--flag` is present.\nfn has_arg_flag(name: &str) -> bool {\n    // Stop searching at `--`.\n    let mut args = std::env::args().take_while(|val| val != \"--\");\n    args.any(|val| val == name)\n}",
+      "references": []
+    },
+    {
+      "name": "get_arg_flag_value",
+      "detail": "fn(name: &str) -> Option<String>",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 28,
+          "character": 0
+        },
+        "end": {
+          "line": 51,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 29,
+          "character": 3
+        },
+        "end": {
+          "line": 29,
+          "character": 21
+        }
+      },
+      "code_string": "/// Gets the value of a `--flag`.\nfn get_arg_flag_value(name: &str) -> Option<String> {\n    // Stop searching at `--`.\n    let mut args = std::env::args().take_while(|val| val != \"--\");\n    loop {\n        let arg = match args.next() {\n            Some(arg) => arg,\n            None => return None,\n        };\n        if !arg.starts_with(name) {\n            continue;\n        }\n        // Strip leading `name`.\n        let suffix = &arg[name.len()..];\n        if suffix.is_empty() {\n            // This argument is exactly `name`; the next one is the value.\n            return args.next();\n        } else if suffix.starts_with('=') {\n            // This argument is `name=value`; get the value.\n            // Strip leading `=`.\n            return Some(suffix[1..].to_owned());\n        }\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "any_arg_flag",
+      "detail": "fn<F>(name: &str, mut check: F) -> bool",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 53,
+          "character": 0
+        },
+        "end": {
+          "line": 88,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 53,
+          "character": 3
+        },
+        "end": {
+          "line": 53,
+          "character": 15
+        }
+      },
+      "code_string": "fn any_arg_flag<F>(name: &str, mut check: F) -> bool\nwhere\n    F: FnMut(&str) -> bool,\n{\n    // Stop searching at `--`.\n    let mut args = std::env::args().take_while(|val| val != \"--\");\n    loop {\n        let arg = match args.next() {\n            Some(arg) => arg,\n            None => return false,\n        };\n        if !arg.starts_with(name) {\n            continue;\n        }\n\n        // Strip leading `name`.\n        let suffix = &arg[name.len()..];\n        let value = if suffix.is_empty() {\n            // This argument is exactly `name`; the next one is the value.\n            match args.next() {\n                Some(arg) => arg,\n                None => return false,\n            }\n        } else if suffix.starts_with('=') {\n            // This argument is `name=value`; get the value.\n            // Strip leading `=`.\n            suffix[1..].to_owned()\n        } else {\n            return false;\n        };\n\n        if check(&value) {\n            return true;\n        }\n    }\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 81,
+              "character": 12
+            },
+            "end": {
+              "line": 81,
+              "character": 18
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 74,
+              "character": 24
+            },
+            "end": {
+              "line": 74,
+              "character": 30
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 53,
+              "character": 0
+            },
+            "end": {
+              "line": 53,
+              "character": 2
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 85,
+              "character": 12
+            },
+            "end": {
+              "line": 85,
+              "character": 18
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 62,
+              "character": 20
+            },
+            "end": {
+              "line": 62,
+              "character": 26
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_first_arg_with_rs_suffix",
+      "detail": "fn() -> Option<String>",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 90,
+          "character": 0
+        },
+        "end": {
+          "line": 95,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 91,
+          "character": 3
+        },
+        "end": {
+          "line": 91,
+          "character": 31
+        }
+      },
+      "code_string": "/// Finds the first argument ends with `.rs`.\nfn get_first_arg_with_rs_suffix() -> Option<String> {\n    // Stop searching at `--`.\n    let mut args = std::env::args().take_while(|val| val != \"--\");\n    args.find(|arg| arg.ends_with(\".rs\"))\n}",
+      "references": []
+    },
+    {
+      "name": "version_info",
+      "detail": "fn() -> VersionMeta",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 97,
+          "character": 0
+        },
+        "end": {
+          "line": 100,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 97,
+          "character": 3
+        },
+        "end": {
+          "line": 97,
+          "character": 15
+        }
+      },
+      "code_string": "fn version_info() -> VersionMeta {\n    VersionMeta::for_command(Command::new(find_fdep()))\n        .expect(\"failed to determine underlying rustc version of Fdep\")\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 97,
+              "character": 0
+            },
+            "end": {
+              "line": 97,
+              "character": 2
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 98,
+              "character": 4
+            },
+            "end": {
+              "line": 99,
+              "character": 71
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find_fdep",
+      "detail": "fn() -> PathBuf",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 102,
+          "character": 0
+        },
+        "end": {
+          "line": 107,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 103,
+          "character": 3
+        },
+        "end": {
+          "line": 103,
+          "character": 12
+        }
+      },
+      "code_string": "/// Returns the path to the `fdep` binary\nfn find_fdep() -> PathBuf {\n    let mut path = std::env::current_exe().expect(\"current executable path invalid\");\n    path.set_file_name(\"fdep\");\n    path\n}",
+      "references": []
+    },
+    {
+      "name": "test_sysroot_consistency",
+      "detail": "fn()",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 109,
+          "character": 0
+        },
+        "end": {
+          "line": 146,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 112,
+          "character": 3
+        },
+        "end": {
+          "line": 112,
+          "character": 27
+        }
+      },
+      "children": [
+        {
+          "name": "get_sysroot",
+          "detail": "fn(mut cmd: Command) -> PathBuf",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 113,
+              "character": 4
+            },
+            "end": {
+              "line": 131,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 113,
+              "character": 7
+            },
+            "end": {
+              "line": 113,
+              "character": 18
+            }
+          }
+        }
+      ],
+      "code_string": "/// Make sure that the `fdep` and `rustc` binary are from the same sysroot.\n/// This can be violated e.g. when fdep is locally built and installed with a different\n/// toolchain than what is used when `cargo fdep` is run.\nfn test_sysroot_consistency() {\n    fn get_sysroot(mut cmd: Command) -> PathBuf {\n        let out = cmd\n            .arg(\"--print\")\n            .arg(\"sysroot\")\n            .output()\n            .expect(\"Failed to run rustc to get sysroot info\");\n        let stdout = String::from_utf8(out.stdout).expect(\"stdout is not valid UTF-8\");\n        let stderr = String::from_utf8(out.stderr).expect(\"stderr is not valid UTF-8\");\n        let stdout = stdout.trim();\n        assert!(\n            out.status.success(),\n            \"Bad status code when getting sysroot info.\\nstdout:\\n{}\\nstderr:\\n{}\",\n            stdout,\n            stderr\n        );\n        PathBuf::from(stdout)\n            .canonicalize()\n            .unwrap_or_else(|_| panic!(\"Failed to canonicalize sysroot: {}\", stdout))\n    }\n\n    let rustc_sysroot = get_sysroot(Command::new(\"rustc\"));\n    let fdep_sysroot = get_sysroot(Command::new(find_fdep()));\n\n    if rustc_sysroot != fdep_sysroot {\n        show_error(format!(\n            \"fdep was built for a different sysroot than the rustc in your current toolchain.\\n\\\n             Make sure you use the same toolchain to run fdep that you used to build it!\\n\\\n             rustc sysroot: `{}`\\n\\\n             fdep sysroot: `{}`\",\n            rustc_sysroot.display(),\n            fdep_sysroot.display()\n        ));\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "clean_package",
+      "detail": "fn(package_name: &str)",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 148,
+          "character": 0
+        },
+        "end": {
+          "line": 167,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 148,
+          "character": 3
+        },
+        "end": {
+          "line": 148,
+          "character": 16
+        }
+      },
+      "code_string": "fn clean_package(package_name: &str) {\n    let mut cmd = Command::new(\"cargo\");\n    cmd.arg(\"clean\");\n\n    cmd.arg(\"-p\");\n    cmd.arg(package_name);\n\n    cmd.arg(\"--target\");\n    cmd.arg(version_info().host);\n\n    let exit_status = cmd\n        .spawn()\n        .expect(\"could not run cargo clean\")\n        .wait()\n        .expect(\"failed to wait for cargo?\");\n\n    if !exit_status.success() {\n        show_error(format!(\"cargo clean failed\"));\n    }\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 148,
+              "character": 0
+            },
+            "end": {
+              "line": 148,
+              "character": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "main",
+      "detail": "fn()",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 169,
+          "character": 0
+        },
+        "end": {
+          "line": 202,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 169,
+          "character": 3
+        },
+        "end": {
+          "line": 169,
+          "character": 7
+        }
+      },
+      "code_string": "fn main() {\n    let mut args = std::env::args();\n    // Skip binary name.\n    args.next().unwrap();\n\n    let Some(first) = args.next() else {\n        show_error(\n            \"`cargo-fdep` called without first argument; please only invoke this binary through `cargo fdep`\"\n        )\n    };\n    match first.as_str() {\n        \"fdep\" => {\n            // eprintln!(\"Running cargo fdep\");\n            // This arm is for when `cargo fdep` is called. We call `cargo rustc` for each applicable target,\n            // but with the `RUSTC` env var set to the `cargo-fdep` binary so that we come back in the other branch,\n            // and dispatch the invocations to `rustc` and `fdep`, respectively.\n            in_cargo_fdep();\n            // eprintln!(\"cargo fdep finished\");\n        }\n        // Check if arg is a path that ends with \"/rustc\"\n        arg if arg.ends_with(\"rustc\") => {\n            // eprintln!(\"Running cargo rustc\");\n            // This arm is executed when `cargo-fdep` runs `cargo rustc` with the `RUSTC_WRAPPER` env var set to itself:\n            // dependencies get dispatched to `rustc`, the final test/binary to `fdep`.\n            inside_cargo_rustc();\n            // eprintln!(\"cargo rustc finished\");\n        }\n        _ => {\n            show_error(\n                \"`cargo-fdep` must be called with either `fdep` or `rustc` as first argument.\",\n            );\n        }\n    }\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 169,
+              "character": 0
+            },
+            "end": {
+              "line": 169,
+              "character": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "TargetKind",
+      "kind": "Enum",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 204,
+          "character": 0
+        },
+        "end": {
+          "line": 209,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 205,
+          "character": 5
+        },
+        "end": {
+          "line": 205,
+          "character": 15
+        }
+      },
+      "children": [
+        {
+          "name": "Library",
+          "kind": 22,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 206,
+              "character": 4
+            },
+            "end": {
+              "line": 206,
+              "character": 15
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 206,
+              "character": 4
+            },
+            "end": {
+              "line": 206,
+              "character": 11
+            }
+          }
+        },
+        {
+          "name": "Bin",
+          "kind": 22,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 207,
+              "character": 4
+            },
+            "end": {
+              "line": 207,
+              "character": 7
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 207,
+              "character": 4
+            },
+            "end": {
+              "line": 207,
+              "character": 7
+            }
+          }
+        },
+        {
+          "name": "Unknown",
+          "kind": 22,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 208,
+              "character": 4
+            },
+            "end": {
+              "line": 208,
+              "character": 11
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 208,
+              "character": 4
+            },
+            "end": {
+              "line": 208,
+              "character": 11
+            }
+          }
+        }
+      ],
+      "code_string": "#[repr(u8)]\nenum TargetKind {\n    Library = 0,\n    Bin,\n    Unknown,\n}",
+      "references": []
+    },
+    {
+      "name": "impl TargetKind",
+      "kind": "Object",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 211,
+          "character": 0
+        },
+        "end": {
+          "line": 215,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 211,
+          "character": 5
+        },
+        "end": {
+          "line": 211,
+          "character": 15
+        }
+      },
+      "children": [
+        {
+          "name": "is_lib_str",
+          "detail": "fn(s: &str) -> bool",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 212,
+              "character": 4
+            },
+            "end": {
+              "line": 214,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 212,
+              "character": 7
+            },
+            "end": {
+              "line": 212,
+              "character": 17
+            }
+          }
+        }
+      ],
+      "code_string": "impl TargetKind {\n    fn is_lib_str(s: &str) -> bool {\n        s == \"lib\" || s == \"rlib\" || s == \"staticlib\"\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "impl From<&cargo_metadata::Target> for TargetKind",
+      "kind": "Object",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 217,
+          "character": 0
+        },
+        "end": {
+          "line": 227,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 217,
+          "character": 39
+        },
+        "end": {
+          "line": 217,
+          "character": 49
+        }
+      },
+      "children": [
+        {
+          "name": "from",
+          "detail": "fn(target: &cargo_metadata::Target) -> Self",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 218,
+              "character": 4
+            },
+            "end": {
+              "line": 226,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 218,
+              "character": 7
+            },
+            "end": {
+              "line": 218,
+              "character": 11
+            }
+          }
+        }
+      ],
+      "code_string": "impl From<&cargo_metadata::Target> for TargetKind {\n    fn from(target: &cargo_metadata::Target) -> Self {\n        if target.kind.iter().any(|s| TargetKind::is_lib_str(s)) {\n            TargetKind::Library\n        } else if let Some(\"bin\") = target.kind.get(0).map(|s| s.as_ref()) {\n            TargetKind::Bin\n        } else {\n            TargetKind::Unknown\n        }\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "impl Display for TargetKind",
+      "kind": "Object",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 229,
+          "character": 0
+        },
+        "end": {
+          "line": 241,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 229,
+          "character": 17
+        },
+        "end": {
+          "line": 229,
+          "character": 27
+        }
+      },
+      "children": [
+        {
+          "name": "fmt",
+          "detail": "fn(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 230,
+              "character": 4
+            },
+            "end": {
+              "line": 240,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 230,
+              "character": 7
+            },
+            "end": {
+              "line": 230,
+              "character": 10
+            }
+          }
+        }
+      ],
+      "code_string": "impl Display for TargetKind {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        write!(\n            f,\n            \"{}\",\n            match self {\n                TargetKind::Library => \"lib\",\n                TargetKind::Bin => \"bin\",\n                TargetKind::Unknown => \"unknown\",\n            }\n        )\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "in_cargo_fdep",
+      "detail": "fn()",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 243,
+          "character": 0
+        },
+        "end": {
+          "line": 307,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 243,
+          "character": 3
+        },
+        "end": {
+          "line": 243,
+          "character": 16
+        }
+      },
+      "code_string": "fn in_cargo_fdep() {\n    let verbose: bool = has_arg_flag(\"-v\");\n\n    // Some basic sanity checks\n    test_sysroot_consistency();\n\n    let manifest_path =\n        get_arg_flag_value(\"--manifest-path\").map(|m| Path::new(&m).canonicalize().unwrap());\n\n    let mut cmd = cargo_metadata::MetadataCommand::new();\n    if let Some(manifest_path) = &manifest_path {\n        cmd.manifest_path(manifest_path);\n    }\n    let mut metadata = match cmd.exec() {\n        Ok(metadata) => metadata,\n        Err(e) => show_error(format!(\"Could not obtain Cargo metadata\\n{}\", e)),\n    };\n    let current_dir = std::env::current_dir();\n\n    if metadata.packages.len() != 0 {\n        let package_index = metadata.packages.iter().position(|package| {\n            let package_manifest_path = Path::new(&package.manifest_path);\n\n            if let Some(manifest_path) = &manifest_path {\n                package_manifest_path == manifest_path\n            } else {\n                let current_dir = current_dir\n                    .as_ref()\n                    .expect(\"could not read current directory\");\n                let package_manifest_directory = package_manifest_path\n                    .parent()\n                    .expect(\"could not find parent directory of package manifest\");\n                package_manifest_directory == current_dir\n            }\n        });\n        // let mut visited_packages = Vec::new();\n        match package_index {\n            Some(index) => process_package(metadata.packages.remove(index)),\n            None => {\n                println!(\"{:#?}\", metadata.workspace_members);\n                // println!(\"{:?}\", metadata.workspace_default_packages());\n                println!(\"{:#?}\", metadata.root_package());\n                let independant_packages = get_independant_packages(&metadata);\n                for package in independant_packages {\n                    process_package(package.clone());\n                }\n\n                // root_package\n                // if metadata.workspace_members.len() != 0 {\n                //     for member in metadata.workspace_members.iter() {\n                //         let package = metadata[member].clone();\n                //         let package_manifest_path = Path::new(&package.manifest_path);\n                //         if package_manifest_path.starts_with(current_dir.as_ref().unwrap())\n                //             && !visited_packages.contains(&package.id.clone())\n                //         {\n                //             println!(\"{:?}\", package.name);\n                //             process_package(package.clone());\n                //             visited_packages.push(package.id);\n                //         }\n                //     }\n                // }\n            }\n        }\n    }\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 280,
+              "character": 27
+            },
+            "end": {
+              "line": 280,
+              "character": 75
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 243,
+              "character": 0
+            },
+            "end": {
+              "line": 243,
+              "character": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_independant_packages",
+      "detail": "fn(metadata: &Metadata) -> Vec<&Package>",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 309,
+          "character": 0
+        },
+        "end": {
+          "line": 335,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 309,
+          "character": 3
+        },
+        "end": {
+          "line": 309,
+          "character": 27
+        }
+      },
+      "code_string": "fn get_independant_packages(metadata: &Metadata) -> Vec<&Package> {\n    let all_packages = metadata.workspace_default_packages();\n\n    // 1. Gather all crate names\n    let all_names: HashSet<_> = all_packages.iter().map(|pkg| pkg.name.clone()).collect();\n\n    // 2. Gather names of local workspace dependencies\n    let mut dep_names = HashSet::new();\n    for pkg in &all_packages {\n        for dep in &pkg.dependencies {\n            if dep.source.is_none() {\n                dep_names.insert(dep.name.clone());\n            }\n        }\n    }\n\n    // 3. Root package names = not depended on by any other package\n    let root_names: HashSet<_> = all_names.difference(&dep_names).cloned().collect();\n\n    // 4. Collect the actual Package structs matching the root names\n    let root_packages: Vec<_> = all_packages\n        .into_iter()\n        .filter(|pkg| root_names.contains(&pkg.name))\n        .collect();\n\n    root_packages\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 309,
+              "character": 0
+            },
+            "end": {
+              "line": 309,
+              "character": 2
+            }
+          }
+        },
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 334,
+              "character": 4
+            },
+            "end": {
+              "line": 334,
+              "character": 17
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "process_package",
+      "detail": "fn(package: cargo_metadata::Package)",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 337,
+          "character": 0
+        },
+        "end": {
+          "line": 441,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 337,
+          "character": 3
+        },
+        "end": {
+          "line": 337,
+          "character": 18
+        }
+      },
+      "code_string": "fn process_package(package: cargo_metadata::Package) {\n    let mut targets: Vec<_> = package.targets.into_iter().collect();\n    let verbose = std::env::var_os(\"FDEP_VERBOSE\").is_some();\n    // Ensure `lib` is compiled before `bin`\n    targets.sort_by_key(|target| TargetKind::from(target) as u8);\n\n    for target in targets {\n        // Skip `cargo fdep`\n        let mut args = std::env::args().skip(2);\n        let kind = TargetKind::from(&target);\n\n        println!(\"Target name: {}\", &target.name);\n\n        // Now we run `cargo check $FLAGS $ARGS`, giving the user the\n        // change to add additional arguments. `FLAGS` is set to identify\n        // this target. The user gets to control what gets actually passed to fdep.\n        let mut cmd = Command::new(\"cargo\");\n        cmd.arg(\"check\");\n\n        match kind {\n            TargetKind::Bin => {\n                // Analyze all the binaries.\n                cmd.arg(\"--bin\").arg(&target.name);\n            }\n            TargetKind::Library => {\n                // There can be only one lib in a crate.\n                cmd.arg(\"--lib\");\n                // Clean the result to disable Cargo's freshness check\n                clean_package(&package.name);\n            }\n            TargetKind::Unknown => {\n                println!(\n                    \"Target {}:{} is not supported\",\n                    target.kind.as_slice().join(\"/\"),\n                    &target.name\n                );\n                continue;\n            }\n        }\n\n        if !cfg!(debug_assertions) && !verbose {\n            cmd.arg(\"-q\");\n        }\n\n        // Forward user-defined `cargo` args until first `--`.\n        while let Some(arg) = args.next() {\n            if arg == \"--\" {\n                break;\n            }\n            cmd.arg(arg);\n        }\n\n        // We want to always run `cargo` with `--target`. This later helps us detect\n        // which crates are proc-macro/build-script (host crates) and which crates are\n        // needed for the program itself.\n        if get_arg_flag_value(\"--target\").is_none() {\n            // When no `--target` is given, default to the host.\n            cmd.arg(\"--target\");\n            cmd.arg(version_info().host);\n        }\n\n        // Serialize the remaining args into a special environment variable.\n        // This will be read by `inside_cargo_rustc` when we go to invoke\n        // our actual target crate (the binary or the test we are running).\n        // Since we're using \"cargo check\", we have no other way of passing\n        // these arguments.\n        let args_vec: Vec<String> = args.collect();\n        cmd.env(\n            \"FDEP_ARGS\",\n            serde_json::to_string(&args_vec).expect(\"failed to serialize args\"),\n        );\n\n        // Set `RUSTC_WRAPPER` to ourselves.  Cargo will prepend that binary to its usual invocation,\n        // i.e., the first argument is `rustc` -- which is what we use in `main` to distinguish\n        // the two codepaths.\n        if env::var_os(\"RUSTC_WRAPPER\").is_some() {\n            eprintln!(\"WARNING: Ignoring existing `RUSTC_WRAPPER` environment variable, fdep does not support wrapping.\");\n        }\n\n        let path = std::env::current_exe().expect(\"current executable path invalid\");\n        cmd.env(\"RUSTC_WRAPPER\", path);\n        if verbose {\n            cmd.env(\"FDEP_VERBOSE\", \"\"); // this makes `inside_cargo_rustc` verbose.\n            eprintln!(\"+ {:?}\", cmd);\n        }\n\n        let mut child = cmd.spawn().expect(\"could not run cargo check\");\n        // 1 hour timeout\n        match child\n            .wait_timeout(Duration::from_secs(60 * 60))\n            .expect(\"failed to wait for subprocess\")\n        {\n            Some(exit_status) => {\n                if !exit_status.success() {\n                    show_error(\"Finished with non-zero exit code\");\n                }\n            }\n            None => {\n                child.kill().expect(\"failed to kill subprocess\");\n                child.wait().expect(\"failed to wait for subprocess\");\n                show_error(\"Killed due to timeout\");\n            }\n        };\n    }\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 337,
+              "character": 0
+            },
+            "end": {
+              "line": 337,
+              "character": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "inside_cargo_rustc",
+      "detail": "fn()",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 443,
+          "character": 0
+        },
+        "end": {
+          "line": 537,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 443,
+          "character": 3
+        },
+        "end": {
+          "line": 443,
+          "character": 21
+        }
+      },
+      "children": [
+        {
+          "name": "contains_target_flag",
+          "detail": "fn() -> bool",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 444,
+              "character": 4
+            },
+            "end": {
+              "line": 456,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 454,
+              "character": 7
+            },
+            "end": {
+              "line": 454,
+              "character": 27
+            }
+          }
+        },
+        {
+          "name": "is_target_crate",
+          "detail": "fn() -> bool",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 458,
+              "character": 4
+            },
+            "end": {
+              "line": 470,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 462,
+              "character": 7
+            },
+            "end": {
+              "line": 462,
+              "character": 22
+            }
+          }
+        },
+        {
+          "name": "is_crate_type_lib",
+          "detail": "fn() -> bool",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 472,
+              "character": 4
+            },
+            "end": {
+              "line": 474,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 472,
+              "character": 7
+            },
+            "end": {
+              "line": 472,
+              "character": 24
+            }
+          }
+        },
+        {
+          "name": "run_command",
+          "detail": "fn(mut cmd: Command)",
+          "kind": 12,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 476,
+              "character": 4
+            },
+            "end": {
+              "line": 491,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 476,
+              "character": 7
+            },
+            "end": {
+              "line": 476,
+              "character": 18
+            }
+          }
+        }
+      ],
+      "code_string": "fn inside_cargo_rustc() {\n    /// Determines if we are being invoked (as rustc) to build a crate for\n    /// the \"target\" architecture, in contrast to the \"host\" architecture.\n    /// Host crates are for build scripts and proc macros and still need to\n    /// be built like normal; target crates need to be built for or interpreted\n    /// by fdep.\n    ///\n    /// Currently, we detect this by checking for \"--target=\", which is\n    /// never set for host crates. This matches what rustc bootstrap does,\n    /// which hopefully makes it \"reliable enough\". This relies on us always\n    /// invoking cargo itself with `--target`, which `in_cargo_fdep` ensures.\n    fn contains_target_flag() -> bool {\n        get_arg_flag_value(\"--target\").is_some()\n    }\n\n    /// Returns whether we are building the target crate.\n    /// Cargo passes the file name as a relative address when building the local crate,\n    /// such as `crawl/src/bin/unsafe-counter.rs` when building the target crate.\n    /// This might not be a stable behavior, but let's rely on this for now.\n    fn is_target_crate() -> bool {\n        let entry_path_arg = match get_first_arg_with_rs_suffix() {\n            Some(arg) => arg,\n            None => return false,\n        };\n        let entry_path: &Path = entry_path_arg.as_ref();\n\n        entry_path.is_relative()\n    }\n\n    fn is_crate_type_lib() -> bool {\n        any_arg_flag(\"--crate-type\", TargetKind::is_lib_str)\n    }\n\n    fn run_command(mut cmd: Command) {\n        // Run it.\n        let verbose = std::env::var_os(\"FDEP_VERBOSE\").is_some();\n        if verbose {\n            eprintln!(\"+ {:?}\", cmd);\n        }\n\n        match cmd.status() {\n            Ok(exit) => {\n                if !exit.success() {\n                    std::process::exit(exit.code().unwrap_or(42));\n                }\n            }\n            Err(e) => panic!(\"error running {:?}:\\n{:?}\", cmd, e),\n        }\n    }\n\n    // TODO: Miri sets custom sysroot here, check if it is needed for us (FDEP-30)\n\n    let is_direct_target = contains_target_flag() && is_target_crate();\n    let mut is_additional_target = false;\n\n    if is_direct_target || is_additional_target {\n        let mut cmd = Command::new(find_fdep());\n        cmd.args(std::env::args().skip(2)); // skip `cargo-fdep rustc`\n\n        // This is the local crate that we want to analyze with Fdep.\n        // (Testing `target_crate` is needed to exclude build scripts.)\n        // We deserialize the arguments that are meant for Fdep from the special\n        // environment variable \"FDEP_ARGS\", and feed them to the 'fdep' binary.\n        //\n        // `env::var` is okay here, well-formed JSON is always UTF-8.\n        let magic = std::env::var(\"FDEP_ARGS\").expect(\"missing FDEP_ARGS\");\n        let fdep_args: Vec<String> =\n            serde_json::from_str(&magic).expect(\"failed to deserialize FDEP_ARGS\");\n        cmd.args(fdep_args);\n\n        run_command(cmd);\n    }\n\n    // Fdep does not build anything.\n    // We need to run rustc (or sccache) to build dependencies.\n    if !is_direct_target || is_crate_type_lib() {\n        let cmd = match which::which(\"sccache\") {\n            Ok(sccache_path) => {\n                let mut cmd = Command::new(&sccache_path);\n                // [\"cargo-fdep\", \"rustc\", ...]\n                cmd.args(std::env::args().skip(1));\n                cmd\n            }\n            Err(_) => {\n                // sccache was not found, use vanilla rustc\n                let mut cmd = Command::new(\"rustc\");\n                // [\"cargo-fdep\", \"rustc\", ...]\n                cmd.args(std::env::args().skip(2));\n                cmd\n            }\n        };\n\n        run_command(cmd);\n    }\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/cargo-fdep.rs",
+          "range": {
+            "start": {
+              "line": 443,
+              "character": 0
+            },
+            "end": {
+              "line": 443,
+              "character": 2
+            }
+          }
+        }
+      ]
+    }
+  ],
+  [
+    {
+      "name": "CallgraphCallbacks",
+      "kind": "Struct",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 0
+        },
+        "end": {
+          "line": 14,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 12,
+          "character": 7
+        },
+        "end": {
+          "line": 12,
+          "character": 25
+        }
+      },
+      "children": [
+        {
+          "name": "output_dir",
+          "detail": "Option<PathBuf>",
+          "kind": 8,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 13,
+              "character": 4
+            },
+            "end": {
+              "line": 13,
+              "character": 31
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 13,
+              "character": 4
+            },
+            "end": {
+              "line": 13,
+              "character": 14
+            }
+          }
+        }
+      ],
+      "code_string": "struct CallgraphCallbacks {\n    output_dir: Option<PathBuf>,\n}",
+      "references": []
+    },
+    {
+      "name": "impl Callbacks for CallgraphCallbacks",
+      "kind": "Object",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 16,
+          "character": 0
+        },
+        "end": {
+          "line": 28,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 16,
+          "character": 19
+        },
+        "end": {
+          "line": 16,
+          "character": 37
+        }
+      },
+      "children": [
+        {
+          "name": "after_analysis",
+          "detail": "fn<'tcx>( &mut self, _compiler: &Compiler, queries: &'tcx Queries<'tcx>, ) -> Compilation",
+          "kind": 6,
+          "tags": [],
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 17,
+              "character": 4
+            },
+            "end": {
+              "line": 27,
+              "character": 5
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 17,
+              "character": 7
+            },
+            "end": {
+              "line": 17,
+              "character": 21
+            }
+          }
+        }
+      ],
+      "code_string": "impl Callbacks for CallgraphCallbacks {\n    fn after_analysis<'tcx>(\n        &mut self,\n        _compiler: &Compiler,\n        queries: &'tcx Queries<'tcx>,\n    ) -> Compilation {\n        queries.global_ctxt().unwrap().enter(|tcx| {\n            analyze(&tcx);\n        });\n\n        Compilation::Stop\n    }\n}",
+      "references": []
+    },
+    {
+      "name": "main",
+      "detail": "fn()",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 30,
+          "character": 0
+        },
+        "end": {
+          "line": 55,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 30,
+          "character": 3
+        },
+        "end": {
+          "line": 30,
+          "character": 7
+        }
+      },
+      "code_string": "fn main() {\n    let mut args: Vec<_> = std::env::args().collect();\n\n    // Make sure we use the right default sysroot. The default sysroot is wrong,\n    // because `get_or_default_sysroot` in `librustc_session` bases that on `current_exe`.\n    //\n    // Make sure we always call `compile_time_sysroot` as that also does some sanity-checks\n    // of the environment we were built in.\n    // FIXME: Ideally we'd turn a bad build env into a compile-time error via CTFE or so.\n    if let Some(sysroot) = compile_time_sysroot() {\n        let sysroot_flag = \"--sysroot\";\n        if !args.iter().any(|e| e == sysroot_flag) {\n            // We need to overwrite the default that librustc_session would compute.\n            args.push(sysroot_flag.to_owned());\n            args.push(sysroot);\n        }\n    }\n\n    // Determine output directory from command-line arguments\n    let output_dir = get_output_dir(&args);\n\n    let mut calls = CallgraphCallbacks { output_dir };\n\n    let run_compiler = rustc_driver::RunCompiler::new(&args, &mut calls);\n    let _ = run_compiler.run();\n}",
+      "references": [
+        {
+          "uri": "file:///Users/eswar.tadiparth/Documents/open-source/fdep-rs/src/bin/fdep.rs",
+          "range": {
+            "start": {
+              "line": 30,
+              "character": 0
+            },
+            "end": {
+              "line": 30,
+              "character": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_output_dir",
+      "detail": "fn(args: &[String]) -> Option<PathBuf>",
+      "kind": "Function",
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {
+          "line": 57,
+          "character": 0
+        },
+        "end": {
+          "line": 72,
+          "character": 1
+        }
+      },
+      "selectionRange": {
+        "start": {
+          "line": 58,
+          "character": 3
+        },
+        "end": {
+          "line": 58,
+          "character": 17
+        }
+      },
+      "code_string": "// Helper function to determine output directory from command-line arguments\nfn get_output_dir(args: &[String]) -> Option<PathBuf> {\n    for (i, arg) in args.iter().enumerate() {\n        if arg == \"--output\" || arg == \"-o\" {\n            if i + 1 < args.len() {\n                return Some(PathBuf::from(&args[i + 1]));\n            }\n        }\n\n        if arg.starts_with(\"--output=\") {\n            let path = arg.split('=').nth(1)?;\n            return Some(PathBuf::from(path));\n        }\n    }\n    None\n}",
+      "references": []
+    }
   ]
 ]

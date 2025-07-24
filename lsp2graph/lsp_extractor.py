@@ -118,7 +118,7 @@ class AsyncUniversalExtractor:
             return None
 
     def get_code_from_symbols(self, d, path, language):
-        if language == "rust":
+        if language == "rust" or "range" in d.keys():
             file_path = path
             start_line = d.get("range").get("start").get("line")
             start_char = d.get("range").get("start").get("character")
@@ -164,10 +164,22 @@ class AsyncUniversalExtractor:
                 (i["code_string"], l1, c1, l2, c2) = self.get_code_from_symbols(
                     i, file_path, language
                 )
-                res = await lsp_client.get_references(
+                hover_details = await lsp_client.get_hover(
+                    file_path, l1, c1
+                )
+                refs = await lsp_client.get_references(
                     file_path, l1, c1, include_declaration=True
                 )
-                i["references"] = [i for i in res]
+                i["hover_details"] = hover_details
+                i["references"] = []
+                for references in refs:
+                    code_string = ""
+                    (code_string, l1, c1, l2, c2) = self.get_code_from_symbols(
+                        references.model_dump(), file_path, language
+                    )
+                    reference_updated = references.model_dump()
+                    reference_updated["code_string"] = code_string
+                    i["references"].append(reference_updated)
                 i["kind"] = SYMBOL_KIND_MAP[i.get("kind")]
 
             return symbols
@@ -286,5 +298,5 @@ async def extract_codebase_simple(root_path: str, output_file: str = None):
         raise
 
 
-codebase = ("/Users/eswar.tadiparth/Documents/open-source/fdep-rs/src",)
-asyncio.run(extract_codebase_simple(codebase[0], "rust.json"))
+codebase = ("./",)
+asyncio.run(extract_codebase_simple(codebase[0], "python.json"))
