@@ -1,6 +1,5 @@
 import os
 import json
-import asyncio
 import traceback
 from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
@@ -37,8 +36,8 @@ SYMBOL_KIND_MAP = {
 }
 
 
-class AsyncUniversalExtractor:
-    """Async universal code extractor using LSP"""
+class UniversalExtractor:
+    """Universal code extractor using LSP"""
 
     def __init__(self):
         self.lsp_clients: Dict[str, LSPClient] = {}
@@ -53,13 +52,13 @@ class AsyncUniversalExtractor:
             "c": ["clangd"],
         }
 
-    async def cleanup(self):
+    def cleanup(self):
         """Clean up all LSP clients and their subprocesses"""
         print("🧹 Cleaning up LSP clients...")
         for language, client in self.lsp_clients.items():
             try:
                 print(f"  Stopping {language} LSP client...")
-                await client.stop()
+                client.stop()
                 print(f"  ✅ Stopped {language} LSP client")
             except Exception as e:
                 print(f"  ❌ Error stopping {language} client: {e}")
@@ -90,7 +89,7 @@ class AsyncUniversalExtractor:
 
         return language_map.get(ext, "unknown")
 
-    async def get_or_create_lsp_client(
+    def get_or_create_lsp_client(
         self, language: str, workspace_path: str
     ) -> Optional[LSPClient]:
         """Get or create LSP client for a language"""
@@ -106,8 +105,8 @@ class AsyncUniversalExtractor:
             args = self.language_server_configs[language][1:]
 
             client = LSPClient(command, args, workspace_path)
-            await client.start()
-            await client.initialize(workspace_path)
+            client.start()
+            client.initialize(workspace_path)
 
             self.lsp_clients[language] = client
             print(f"✅ Initialized LSP client for {language}")
@@ -144,7 +143,7 @@ class AsyncUniversalExtractor:
 
         return ("".join(selected_lines), start_line, start_char, end_line, end_char)
 
-    async def extract_module_from_file(self, file_path: str, workspace_path: str):
+    def extract_module_from_file(self, file_path: str, workspace_path: str):
         """Extract a single module from a file using LSP"""
         try:
             language = self.detect_language(file_path)
@@ -153,21 +152,21 @@ class AsyncUniversalExtractor:
                 return None
 
             # Get or create LSP client
-            lsp_client = await self.get_or_create_lsp_client(language, workspace_path)
+            lsp_client = self.get_or_create_lsp_client(language, workspace_path)
             if not lsp_client:
                 print(f"No LSP client available for {language}")
                 return None
 
             # Get document symbols
-            symbols = await lsp_client.get_document_symbols(file_path)
+            symbols = lsp_client.get_document_symbols(file_path)
             for i in symbols:
                 (i["code_string"], l1, c1, l2, c2) = self.get_code_from_symbols(
                     i, file_path, language
                 )
-                hover_details = await lsp_client.get_hover(
+                hover_details = lsp_client.get_hover(
                     file_path, l1, c1
                 )
-                refs = await lsp_client.get_references(
+                refs = lsp_client.get_references(
                     file_path, l1, c1, include_declaration=True
                 )
                 i["hover_details"] = hover_details
@@ -189,7 +188,7 @@ class AsyncUniversalExtractor:
             traceback.print_exc()
             return None
 
-    async def extract_codebase(self, root_path: str):
+    def extract_codebase(self, root_path: str):
         """Extract entire codebase from a directory"""
         try:
             file_patterns = [
@@ -246,7 +245,7 @@ class AsyncUniversalExtractor:
                 print(f"Processing {len(files)} {language} files...")
 
                 # Initialize LSP for this language
-                lsp_client = await self.get_or_create_lsp_client(
+                lsp_client = self.get_or_create_lsp_client(
                     language, str(root_path_obj.absolute())
                 )
                 if not lsp_client:
@@ -260,7 +259,7 @@ class AsyncUniversalExtractor:
                 for file_path in files:
                     try:
                         print(file_path)
-                        module = await self.extract_module_from_file(
+                        module = self.extract_module_from_file(
                             str(file_path), str(root_path_obj.absolute())
                         )
                         if module:
@@ -278,14 +277,14 @@ class AsyncUniversalExtractor:
             return codebase
         finally:
             # Always clean up LSP clients
-            await self.cleanup()
+            self.cleanup()
 
 
-async def extract_codebase_simple(root_path: str, output_file: str = None):
+def extract_codebase_simple(root_path: str, output_file: str = None):
     """Simple synchronous function to extract codebase"""
-    extractor = AsyncUniversalExtractor()
+    extractor = UniversalExtractor()
     try:
-        codebase = await extractor.extract_codebase(root_path)
+        codebase = extractor.extract_codebase(root_path)
         if output_file:
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(codebase, f, indent=2, default=str)
@@ -294,9 +293,9 @@ async def extract_codebase_simple(root_path: str, output_file: str = None):
     except Exception as e:
         print(f"Error during extraction: {e}")
         # Ensure cleanup happens even if there's an error
-        await extractor.cleanup()
+        extractor.cleanup()
         raise
 
 
-codebase = ("./",)
-asyncio.run(extract_codebase_simple(codebase[0], "python.json"))
+if __name__ == "__main__":
+    codebase = extract_codebase_simple("./", "python.json")

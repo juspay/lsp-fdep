@@ -1,11 +1,11 @@
 import json
-import asyncio
 import subprocess
 import os
 import threading
 import uuid
 import time
 import logging
+import queue
 from typing import Dict, List, Any, Optional, Callable, Union, Tuple
 from enum import Enum
 from pathlib import Path
@@ -83,6 +83,31 @@ class LSPError(Exception):
         super().__init__(f"LSP Error {code}: {message}")
 
 
+class ResponseWaiter:
+    """Helper class to wait for responses"""
+    
+    def __init__(self):
+        self.event = threading.Event()
+        self.result = None
+        self.error = None
+    
+    def set_result(self, result):
+        self.result = result
+        self.event.set()
+    
+    def set_error(self, error):
+        self.error = error
+        self.event.set()
+    
+    def wait(self, timeout=30.0):
+        if self.event.wait(timeout):
+            if self.error:
+                raise self.error
+            return self.result
+        else:
+            raise LSPError(-32000, "Request timeout")
+
+
 class LSPClient:
     """
     Language Server Protocol Client implementation
@@ -99,7 +124,7 @@ class LSPClient:
 
         # Message handling
         self.request_id = 0
-        self.pending_requests: Dict[Union[str, int], asyncio.Future] = {}
+        self.pending_requests: Dict[Union[str, int], ResponseWaiter] = {}
         self.notification_handlers: Dict[str, Callable] = {}
         self.request_handlers: Dict[str, Callable] = {}
 
@@ -109,9 +134,11 @@ class LSPClient:
         self.open_files: Dict[str, Dict[str, Any]] = {}
         self.diagnostics: Dict[str, List[Diagnostic]] = {}
 
-        # Async management
-        self.read_task: Optional[asyncio.Task] = None
-        self.lock = asyncio.Lock()
+        # Threading
+        self.read_thread: Optional[threading.Thread] = None
+        self.stderr_thread: Optional[threading.Thread] = None
+        self.lock = threading.Lock()
+        self.write_lock = threading.Lock()
 
     def path_to_uri(self, path: str) -> str:
         """Convert file path to URI"""
@@ -173,7 +200,7 @@ class LSPClient:
         }
         return language_map.get(ext, "plaintext")
 
-    async def start(self) -> None:
+    def start(self) -> None:
         """Start the LSP server process"""
         if self.running:
             return
@@ -195,24 +222,25 @@ class LSPClient:
             logger.info(f"Started LSP server: {' '.join(cmd)}")
 
             # Start reading messages
-            self.read_task = asyncio.create_task(self._read_messages())
+            self.read_thread = threading.Thread(target=self._read_messages, daemon=True)
+            self.read_thread.start()
 
             # Start stderr monitoring
-            asyncio.create_task(self._monitor_stderr())
+            self.stderr_thread = threading.Thread(target=self._monitor_stderr, daemon=True)
+            self.stderr_thread.start()
 
         except Exception as e:
             logger.error(f"Failed to start LSP server: {e}")
             raise
 
-    async def _monitor_stderr(self) -> None:
+    def _monitor_stderr(self) -> None:
         """Monitor stderr output from the language server"""
         if not self.process or not self.process.stderr:
             return
 
-        loop = asyncio.get_event_loop()
         while self.running:
             try:
-                line = await loop.run_in_executor(None, self.process.stderr.readline)
+                line = self.process.stderr.readline()
                 if line:
                     decoded_line = line.decode("utf-8", errors="ignore").strip()
                     if decoded_line:
@@ -223,16 +251,14 @@ class LSPClient:
                 logger.error(f"Error reading stderr: {e}")
                 break
 
-    async def _read_messages(self) -> None:
+    def _read_messages(self) -> None:
         """Read messages from the LSP server"""
         buffer = b""
 
         while self.running and self.process and self.process.stdout:
             try:
                 # Read data
-                data = await asyncio.get_event_loop().run_in_executor(
-                    None, self.process.stdout.read, 4096
-                )
+                data = self.process.stdout.read(4096)
 
                 if not data:
                     break
@@ -270,7 +296,7 @@ class LSPClient:
                     try:
                         message_str = message_data.decode("utf-8")
                         message = json.loads(message_str)
-                        await self._handle_message(message)
+                        self._handle_message(message)
                     except Exception as e:
                         logger.error(f"Error processing message: {e}")
 
@@ -278,17 +304,17 @@ class LSPClient:
                 logger.error(f"Error reading from LSP server: {e}")
                 break
 
-    async def _handle_message(self, message: Dict[str, Any]) -> None:
+    def _handle_message(self, message: Dict[str, Any]) -> None:
         """Handle incoming LSP message"""
         try:
             if "id" in message and "method" not in message:
                 # Response
                 msg_id = message["id"]
                 if msg_id in self.pending_requests:
-                    future = self.pending_requests.pop(msg_id)
+                    waiter = self.pending_requests.pop(msg_id)
                     if "error" in message:
                         error = message["error"]
-                        future.set_exception(
+                        waiter.set_error(
                             LSPError(
                                 error.get("code", -1),
                                 error.get("message", "Unknown error"),
@@ -296,7 +322,7 @@ class LSPClient:
                             )
                         )
                     else:
-                        future.set_result(message.get("result"))
+                        waiter.set_result(message.get("result"))
 
             elif "method" in message:
                 method = message["method"]
@@ -306,29 +332,29 @@ class LSPClient:
                     # Server request
                     if method in self.request_handlers:
                         try:
-                            result = await self.request_handlers[method](params)
-                            await self._send_response(message["id"], result)
+                            result = self.request_handlers[method](params)
+                            self._send_response(message["id"], result)
                         except Exception as e:
-                            await self._send_error(message["id"], -32603, str(e))
+                            self._send_error(message["id"], -32603, str(e))
                     else:
-                        await self._send_error(
+                        self._send_error(
                             message["id"], -32601, f"Method not found: {method}"
                         )
                 else:
                     # Notification
                     if method in self.notification_handlers:
                         try:
-                            await self.notification_handlers[method](params)
+                            self.notification_handlers[method](params)
                         except Exception as e:
                             logger.error(f"Error handling notification {method}: {e}")
 
                     # Handle built-in notifications
-                    await self._handle_builtin_notification(method, params)
+                    self._handle_builtin_notification(method, params)
 
         except Exception as e:
             logger.error(f"Error handling message: {e}")
 
-    async def _handle_builtin_notification(
+    def _handle_builtin_notification(
         self, method: str, params: Dict[str, Any]
     ) -> None:
         """Handle built-in LSP notifications"""
@@ -363,7 +389,7 @@ class LSPClient:
                 f"Updated diagnostics for {uri}: {len(diagnostics)} diagnostics"
             )
 
-    async def _send_message(self, message: Dict[str, Any]) -> None:
+    def _send_message(self, message: Dict[str, Any]) -> None:
         """Send message to LSP server"""
         if not self.process or not self.process.stdin:
             raise RuntimeError("LSP server not running")
@@ -375,15 +401,16 @@ class LSPClient:
         header_bytes = header.encode("utf-8")
 
         try:
-            self.process.stdin.write(header_bytes + message_bytes)
-            self.process.stdin.flush()
+            with self.write_lock:
+                self.process.stdin.write(header_bytes + message_bytes)
+                self.process.stdin.flush()
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             raise
 
-    async def _send_request(self, method: str, params: Any = None) -> Any:
+    def _send_request(self, method: str, params: Any = None) -> Any:
         """Send request and wait for response"""
-        async with self.lock:
+        with self.lock:
             self.request_id += 1
             request_id = self.request_id
 
@@ -394,29 +421,29 @@ class LSPClient:
             "params": params or {},
         }
 
-        future = asyncio.Future()
-        self.pending_requests[request_id] = future
+        waiter = ResponseWaiter()
+        self.pending_requests[request_id] = waiter
 
-        await self._send_message(message)
+        self._send_message(message)
 
         try:
-            result = await asyncio.wait_for(future, timeout=30.0)
+            result = waiter.wait(timeout=30.0)
             return result
-        except asyncio.TimeoutError:
+        except Exception as e:
             self.pending_requests.pop(request_id, None)
-            raise LSPError(-32000, f"Request timeout: {method}")
+            raise
 
-    async def _send_notification(self, method: str, params: Any = None) -> None:
+    def _send_notification(self, method: str, params: Any = None) -> None:
         """Send notification"""
         message = {"jsonrpc": "2.0", "method": method, "params": params or {}}
-        await self._send_message(message)
+        self._send_message(message)
 
-    async def _send_response(self, request_id: Union[str, int], result: Any) -> None:
+    def _send_response(self, request_id: Union[str, int], result: Any) -> None:
         """Send response to server request"""
         message = {"jsonrpc": "2.0", "id": request_id, "result": result}
-        await self._send_message(message)
+        self._send_message(message)
 
-    async def _send_error(
+    def _send_error(
         self, request_id: Union[str, int], code: int, message: str, data: Any = None
     ) -> None:
         """Send error response to server request"""
@@ -427,11 +454,11 @@ class LSPClient:
         }
         if data is not None:
             error_msg["error"]["data"] = data
-        await self._send_message(error_msg)
+        self._send_message(error_msg)
 
     # LSP Lifecycle Methods
 
-    async def initialize(self, workspace_path: str) -> Dict[str, Any]:
+    def initialize(self, workspace_path: str) -> Dict[str, Any]:
         """Initialize the LSP server"""
         params = {
             "processId": os.getpid(),
@@ -487,24 +514,24 @@ class LSPClient:
             ],
         }
 
-        result = await self._send_request("initialize", params)
+        result = self._send_request("initialize", params)
         self.server_capabilities = result.get("capabilities", {})
         self.initialized = True
 
         # Send initialized notification
-        await self._send_notification("initialized", {})
+        self._send_notification("initialized", {})
 
         logger.info("LSP server initialized successfully")
         return result
 
-    async def shutdown(self) -> None:
+    def shutdown(self) -> None:
         """Shutdown the LSP server"""
         if self.initialized:
-            await self._send_request("shutdown")
-            await self._send_notification("exit")
+            self._send_request("shutdown")
+            self._send_notification("exit")
             self.initialized = False
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         """Stop the LSP client and server"""
         if not self.running:
             return
@@ -513,16 +540,16 @@ class LSPClient:
 
         try:
             if self.initialized:
-                await self.shutdown()
+                self.shutdown()
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
 
-        if self.read_task:
-            self.read_task.cancel()
-            try:
-                await self.read_task
-            except asyncio.CancelledError:
-                pass
+        # Wait for threads to finish
+        if self.read_thread and self.read_thread.is_alive():
+            self.read_thread.join(timeout=5)
+        
+        if self.stderr_thread and self.stderr_thread.is_alive():
+            self.stderr_thread.join(timeout=5)
 
         if self.process:
             try:
@@ -538,7 +565,7 @@ class LSPClient:
 
     # File Operations
 
-    async def did_open(self, file_path: str) -> None:
+    def did_open(self, file_path: str) -> None:
         """Notify server that a file is opened"""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -563,15 +590,15 @@ class LSPClient:
             "path": file_path,
         }
 
-        await self._send_notification("textDocument/didOpen", params)
+        self._send_notification("textDocument/didOpen", params)
         logger.debug(f"Opened file: {file_path}")
 
-    async def did_change(self, file_path: str, content: str = None) -> None:
+    def did_change(self, file_path: str, content: str = None) -> None:
         """Notify server that a file has changed"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
             return
 
         if content is None:
@@ -586,17 +613,17 @@ class LSPClient:
             "contentChanges": [{"text": content}],
         }
 
-        await self._send_notification("textDocument/didChange", params)
+        self._send_notification("textDocument/didChange", params)
 
-    async def did_save(self, file_path: str) -> None:
+    def did_save(self, file_path: str) -> None:
         """Notify server that a file has been saved"""
         uri = self.path_to_uri(file_path)
 
         params = {"textDocument": {"uri": uri}}
 
-        await self._send_notification("textDocument/didSave", params)
+        self._send_notification("textDocument/didSave", params)
 
-    async def did_close(self, file_path: str) -> None:
+    def did_close(self, file_path: str) -> None:
         """Notify server that a file is closed"""
         uri = self.path_to_uri(file_path)
 
@@ -606,43 +633,43 @@ class LSPClient:
         params = {"textDocument": {"uri": uri}}
 
         del self.open_files[uri]
-        await self._send_notification("textDocument/didClose", params)
+        self._send_notification("textDocument/didClose", params)
         logger.debug(f"Closed file: {file_path}")
 
     # Language Server Features
 
-    async def get_hover(
+    def get_hover(
         self, file_path: str, line: int, character: int
     ) -> Optional[Dict[str, Any]]:
         """Get hover information at position"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
         }
 
-        result = await self._send_request("textDocument/hover", params)
+        result = self._send_request("textDocument/hover", params)
         return result
 
-    async def get_definition(
+    def get_definition(
         self, file_path: str, line: int, character: int
     ) -> List[Location]:
         """Get definition at position"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
         }
 
-        result = await self._send_request("textDocument/definition", params)
+        result = self._send_request("textDocument/definition", params)
 
         if not result:
             return []
@@ -667,7 +694,7 @@ class LSPClient:
             for loc in locations
         ]
 
-    async def get_references(
+    def get_references(
         self,
         file_path: str,
         line: int,
@@ -678,7 +705,7 @@ class LSPClient:
         uri = self.path_to_uri(file_path)
         print(uri)
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
@@ -686,7 +713,7 @@ class LSPClient:
             "context": {"includeDeclaration": include_declaration},
         }
 
-        result = await self._send_request("textDocument/references", params)
+        result = self._send_request("textDocument/references", params)
 
         if not result:
             return []
@@ -707,72 +734,72 @@ class LSPClient:
             for loc in result
         ]
 
-    async def get_completion(
+    def get_completion(
         self, file_path: str, line: int, character: int
     ) -> Optional[Dict[str, Any]]:
         """Get completion suggestions at position"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
         }
 
-        result = await self._send_request("textDocument/completion", params)
+        result = self._send_request("textDocument/completion", params)
         return result
 
-    async def get_signature_help(
+    def get_signature_help(
         self, file_path: str, line: int, character: int
     ) -> Optional[Dict[str, Any]]:
         """Get signature help at position"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
         }
 
-        result = await self._send_request("textDocument/signatureHelp", params)
+        result = self._send_request("textDocument/signatureHelp", params)
         return result
 
-    async def get_document_symbols(self, file_path: str) -> List[Dict[str, Any]]:
+    def get_document_symbols(self, file_path: str) -> List[Dict[str, Any]]:
         """Get document symbols"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {"textDocument": {"uri": uri}}
 
-        result = await self._send_request("textDocument/documentSymbol", params)
+        result = self._send_request("textDocument/documentSymbol", params)
         return result or []
 
-    async def get_workspace_symbols(self, query: str = "") -> List[Dict[str, Any]]:
+    def get_workspace_symbols(self, query: str = "") -> List[Dict[str, Any]]:
         """Get workspace symbols"""
         params = {"query": query}
 
-        result = await self._send_request("workspace/symbol", params)
+        result = self._send_request("workspace/symbol", params)
         return result or []
 
-    async def format_document(self, file_path: str) -> List[TextEdit]:
+    def format_document(self, file_path: str) -> List[TextEdit]:
         """Format entire document"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": True},
         }
 
-        result = await self._send_request("textDocument/formatting", params)
+        result = self._send_request("textDocument/formatting", params)
 
         if not result:
             return []
@@ -794,7 +821,7 @@ class LSPClient:
             for edit in result
         ]
 
-    async def format_range(
+    def format_range(
         self,
         file_path: str,
         start_line: int,
@@ -806,7 +833,7 @@ class LSPClient:
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
@@ -817,7 +844,7 @@ class LSPClient:
             "options": {"tabSize": 4, "insertSpaces": True},
         }
 
-        result = await self._send_request("textDocument/rangeFormatting", params)
+        result = self._send_request("textDocument/rangeFormatting", params)
 
         if not result:
             return []
@@ -839,14 +866,14 @@ class LSPClient:
             for edit in result
         ]
 
-    async def rename_symbol(
+    def rename_symbol(
         self, file_path: str, line: int, character: int, new_name: str
     ) -> Optional[Dict[str, Any]]:
         """Rename symbol at position"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {
             "textDocument": {"uri": uri},
@@ -854,10 +881,10 @@ class LSPClient:
             "newName": new_name,
         }
 
-        result = await self._send_request("textDocument/rename", params)
+        result = self._send_request("textDocument/rename", params)
         return result
 
-    async def get_code_actions(
+    def get_code_actions(
         self,
         file_path: str,
         start_line: int,
@@ -870,7 +897,7 @@ class LSPClient:
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         diag_data = []
         if diagnostics:
@@ -903,41 +930,41 @@ class LSPClient:
             "context": {"diagnostics": diag_data},
         }
 
-        result = await self._send_request("textDocument/codeAction", params)
+        result = self._send_request("textDocument/codeAction", params)
         return result or []
 
-    async def get_code_lens(self, file_path: str) -> List[Dict[str, Any]]:
+    def get_code_lens(self, file_path: str) -> List[Dict[str, Any]]:
         """Get code lens for document"""
         uri = self.path_to_uri(file_path)
 
         if uri not in self.open_files:
-            await self.did_open(file_path)
+            self.did_open(file_path)
 
         params = {"textDocument": {"uri": uri}}
 
-        result = await self._send_request("textDocument/codeLens", params)
+        result = self._send_request("textDocument/codeLens", params)
         return result or []
 
-    async def execute_command(self, command: str, arguments: List[Any] = None) -> Any:
+    def execute_command(self, command: str, arguments: List[Any] = None) -> Any:
         """Execute workspace command"""
         params = {"command": command, "arguments": arguments or []}
 
-        result = await self._send_request("workspace/executeCommand", params)
+        result = self._send_request("workspace/executeCommand", params)
         return result
 
     # Utility methods for high-level operations
 
-    async def get_diagnostics(self, file_path: str) -> List[Diagnostic]:
+    def get_diagnostics(self, file_path: str) -> List[Diagnostic]:
         """Get cached diagnostics for a file"""
         uri = self.path_to_uri(file_path)
         return self.diagnostics.get(uri, [])
 
-    async def find_symbol_definition(
+    def find_symbol_definition(
         self, symbol_name: str, file_path: str = None
     ) -> Optional[Location]:
         """Find the definition of a symbol by name"""
         # First try workspace symbols
-        symbols = await self.get_workspace_symbols(symbol_name)
+        symbols = self.get_workspace_symbols(symbol_name)
 
         for symbol in symbols:
             if symbol.get("name") == symbol_name:
@@ -959,7 +986,7 @@ class LSPClient:
 
         return None
 
-    async def apply_text_edits(self, edits: List[Tuple[str, List[TextEdit]]]) -> None:
+    def apply_text_edits(self, edits: List[Tuple[str, List[TextEdit]]]) -> None:
         """Apply text edits to multiple files"""
         for file_path, file_edits in edits:
             # Read current file content
@@ -1004,7 +1031,7 @@ class LSPClient:
                 f.writelines(lines)
 
             # Notify server of change
-            await self.did_change(file_path)
+            self.did_change(file_path)
 
     def register_notification_handler(
         self, method: str, handler: Callable[[Dict[str, Any]], None]
@@ -1018,28 +1045,28 @@ class LSPClient:
         """Register custom request handler"""
         self.request_handlers[method] = handler
 
-    async def __aenter__(self):
-        """Async context manager entry"""
-        await self.start()
+    def __enter__(self):
+        """Context manager entry"""
+        self.start()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit"""
-        await self.stop()
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.stop()
 
 
 # High-level functions for common operations
 
 
-async def create_lsp_client(
+def create_lsp_client(
     command: str, args: List[str] = None, workspace_path: str = None
 ) -> LSPClient:
     """Create and initialize an LSP client"""
     client = LSPClient(command, args, workspace_path)
-    await client.start()
+    client.start()
 
     if workspace_path:
-        await client.initialize(workspace_path)
+        client.initialize(workspace_path)
 
     return client
 
@@ -1050,9 +1077,9 @@ class LSPTools:
     def __init__(self, client: LSPClient):
         self.client = client
 
-    async def get_symbol_definition_content(self, symbol_name: str) -> str:
+    def get_symbol_definition_content(self, symbol_name: str) -> str:
         """Get the source code content of a symbol definition"""
-        location = await self.client.find_symbol_definition(symbol_name)
+        location = self.client.find_symbol_definition(symbol_name)
 
         if not location:
             return f"Symbol '{symbol_name}' not found"
@@ -1085,11 +1112,11 @@ class LSPTools:
         except Exception as e:
             return f"Error reading definition: {e}"
 
-    async def get_all_references_content(
+    def get_all_references_content(
         self, file_path: str, line: int, character: int
     ) -> str:
         """Get all references to a symbol with surrounding context"""
-        references = await self.client.get_references(file_path, line, character)
+        references = self.client.get_references(file_path, line, character)
 
         if not references:
             return "No references found"
@@ -1126,9 +1153,9 @@ class LSPTools:
 
         return result
 
-    async def get_diagnostics_report(self, file_path: str) -> str:
+    def get_diagnostics_report(self, file_path: str) -> str:
         """Get a formatted diagnostics report for a file"""
-        diagnostics = await self.client.get_diagnostics(file_path)
+        diagnostics = self.client.get_diagnostics(file_path)
 
         if not diagnostics:
             return f"No diagnostics found for {file_path}"
